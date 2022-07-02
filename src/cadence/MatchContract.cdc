@@ -40,6 +40,7 @@ pub contract MatchContract {
         // Return oldest waiting index as well as first index of waitingIndices.
         pub fun getRandomWaitingIndex(): UInt32? {
             if self.waitingIndices.length > 0 {
+                var iterationIndex = 0
                 for waitingIndex in self.waitingIndices {
                     assert(self.indexAddressMap.keys.contains(waitingIndex), message: "IndexAddressMap should contain index ".concat(waitingIndex.toString()))
                     if let addressGroups = self.indexAddressMap[waitingIndex] {
@@ -90,17 +91,20 @@ pub contract MatchContract {
         // Must match with specific index in case host register slightly before.
         pub fun match(
             index: UInt32,
-            challenger: AuthAccount, 
-            host: AuthAccount
-        ): Bool {
+            challenger: AuthAccount
+        ): Address? {
             pre {
                 self.matchActive: "Matching is not active."
+                self.indexAddressMap.keys.contains(index): "Index not found in indexAddressMap"
             }
-            let hostKey = host.address.toString().toLower()
+            let addresses = self.indexAddressMap[index] ?? {}
+            assert(addresses[MatchRole.host] != nil, message: "Host not found for this index.")
+            let hostAddress = addresses[MatchRole.host]!
+            let hostKey = hostAddress.toString().toLower()
             let matchGroups = self.addressGroupMap[hostKey] ?? {}
             let waitingGroup: [UInt32] = matchGroups[MatchStatus.waiting] ?? []
-            assert(waitingGroup.length > 0, message: host.address.toString().concat("'s waiting group length should over 0"))
-            assert(waitingGroup.contains(index), message: host.address.toString().concat(" not contain index: ").concat(index.toString()))
+            assert(waitingGroup.length > 0, message: hostAddress.toString().concat("'s waiting group length should over 0"))
+            assert(waitingGroup.contains(index), message: hostAddress.toString().concat(" not contain index: ").concat(index.toString()))
 
             if let firstIndex: Int = waitingGroup.firstIndex(of: index) {
                 let matchIndex = waitingGroup.remove(at: firstIndex)
@@ -112,7 +116,7 @@ pub contract MatchContract {
 
                 let addressGroup = self.indexAddressMap[matchIndex] ?? {}
                 assert(addressGroup[MatchRole.host] != nil, message: "Host should exist in indexAddressMap before matching.")
-                assert(addressGroup[MatchRole.host] == host.address, message: "Host should be ".concat(host.address.toString()).concat("."))
+                assert(addressGroup[MatchRole.host] == hostAddress, message: "Host should be ".concat(hostAddress.toString()).concat("."))
                 assert(addressGroup[MatchRole.challenger] == nil, message: "Challenger should not exist in indexAddressMap before matching.")
                 addressGroup[MatchRole.challenger] = challenger.address
                 self.indexAddressMap[matchIndex] = addressGroup
@@ -129,9 +133,9 @@ pub contract MatchContract {
                 self.matchedIndices.append(matchIndex)
                 assert(self.waitingIndices.contains(matchIndex), message: "WaitingIndices should not include ".concat(matchIndex.toString()).concat(" after matched."))
                 assert(self.matchedIndices.contains(matchIndex), message: "MatchedIndices should include ".concat(matchIndex.toString()).concat(" after matched."))
-                return true
+                return hostAddress
             } else {
-                return false
+                return nil
             }
         }
 
@@ -158,9 +162,8 @@ pub contract MatchContract {
 
         pub fun match(
             index: UInt32, 
-            challenger: AuthAccount,
-            host: AuthAccount
-        ): Bool
+            challenger: AuthAccount
+        ): Address?
 
     }
 

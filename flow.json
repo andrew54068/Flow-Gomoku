@@ -1,21 +1,32 @@
 {
+	"contracts": {
+		"MatchContract": "./src/cadence/MatchContract.cdc",
+		"FungibleToken": "./src/cadence/FungibleToken.cdc",
+		"NonFungibleToken": "./src/cadence/NonFungibleToken.cdc"
+	},
+	"deployments": {
+		"emulator": {
+			"emulator-account": [
+				"MatchContract",
+				"FungibleToken",
+				"NonFungibleToken"
+			]
+		}
+	},
+	"accounts": {
+		"emulator-account": {
+			"address": "0xf8d6e0586b0a20c7",
+			"key": "0a550d01d4226b219f2a3051165d51467ebe5dc757b10bbdb1db7f1ccd77bee4",
+			"chain": "flow-emulator"
+		}
+	},
+	"networks": {
+		"emulator": "127.0.0.1:3569"
+	},
 	"emulators": {
 		"default": {
 			"port": 3569,
 			"serviceAccount": "emulator-account"
 		}
-	},
-	"contracts": {},
-	"networks": {
-		"emulator": "127.0.0.1:3569",
-		"mainnet": "access.mainnet.nodes.onflow.org:9000",
-		"testnet": "access.devnet.nodes.onflow.org:9000"
-	},
-	"accounts": {
-		"emulator-account": {
-			"address": "f8d6e0586b0a20c7",
-			"key": "0a550d01d4226b219f2a3051165d51467ebe5dc757b10bbdb1db7f1ccd77bee4"
-		}
-	},
-	"deployments": {}
+	}
 }
