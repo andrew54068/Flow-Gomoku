@@ -31,17 +31,17 @@ pub contract Gomoku {
         self.CollectionPublicPath = /public/gomokuCollection
         self.compositionMatcher = MatchContract.Matcher()
 
-        if self.account.borrow<&FlowToken.Vault{FungibleToken.Receiver}>(from: /public/flowTokenReceiver) == nil {
+        if self.account.borrow<&FlowToken.Vault{FungibleToken.Receiver}>(from: /storage/flowTokenVault) == nil {
             let flowVault <- FlowToken.createEmptyVault()
             self.account.save(<- flowVault, to: /storage/flowTokenVault)
         }
 
-        if self.account.borrow<&BloctoToken.Vault{FungibleToken.Receiver}>(from: BloctoToken.TokenPublicReceiverPath) == nil {
+        if self.account.borrow<&BloctoToken.Vault{FungibleToken.Receiver}>(from: BloctoToken.TokenStoragePath) == nil {
             let bltVault <- BloctoToken.createEmptyVault()
             self.account.save(<- bltVault, to: BloctoToken.TokenStoragePath)
         }
 
-        if self.account.borrow<&TeleportedTetherToken.Vault{FungibleToken.Receiver}>(from: TeleportedTetherToken.TokenPublicReceiverPath) == nil {
+        if self.account.borrow<&TeleportedTetherToken.Vault{FungibleToken.Receiver}>(from: TeleportedTetherToken.TokenStoragePath) == nil {
             let tUSDTVault <- TeleportedTetherToken.createEmptyVault()
             self.account.save(<- tUSDTVault, to: TeleportedTetherToken.TokenStoragePath)
         }
@@ -49,10 +49,10 @@ pub contract Gomoku {
 
     // Script
     pub fun getWaitingIndex(hostAddress: Address): UInt32? {
-        return compositionMatcher.getWaitingIndex(hostAddress: hostAddress)
+        return self.compositionMatcher.getWaitingIndex(hostAddress: hostAddress)
     }
     pub fun getRandomWaitingIndex(): UInt32? {
-        return compositionMatcher.getRandomWaitingIndex()
+        return self.compositionMatcher.getRandomWaitingIndex()
     }
 
     // Transaction
@@ -60,50 +60,53 @@ pub contract Gomoku {
         host: AuthAccount,
         eachBets: @[FungibleToken.Vault],
     ) {
-        compositionMatcher.register(host: host)
+        self.compositionMatcher.register(host: host)
 
-        let composition <- Composition(
-            contractAccount: getAccount(self.account.address)
+        let composition: @Composition <- create Composition(
+            contractAccount: getAccount(self.account.address),
+            boardSize: 15,
             totalRound: 2,
-            eachBets: eachBets)
+            openingBets: <- eachBets)
+
+        let currency = composition.getBetCurrency()
+        let totalBets = composition.getAllBets()
 
         // Create a new Gomoku and put it in storage
-        host.save(<- composition, to: CollectionStoragePath)
+        host.save(<- composition, to: self.CollectionStoragePath)
 
         // Create a public capability to the Vault that only exposes
         // the deposit function through the Receiver interface
-        host.link<&PublicCompositioning>(
+        host.link<&Gomoku.Composition{Gomoku.PublicCompositioning}>(
             self.CollectionStoragePath,
             target: self.CollectionPublicPath
         )
 
         emit CompositionCreated(
-            host: Address,
-            currency: String,
-            totalBets: UFix64)
+            host: host.address,
+            currency: currency,
+            totalBets: totalBets)
     }
 
     pub fun matchOpponent(
         index: UInt32, 
         challenger: AuthAccount
     ): Bool {
-        if let matchedHost = compositionMatcher.match(index: index, challenger: challenger) {
-            let currency = composition.getBetCurrency()
-            let allBets = composition.getAllBets()
+        if let matchedHost = self.compositionMatcher.match(index: index, challenger: challenger) {
 
-            let capability = account.getCapability(self.CollectionStoragePath)
-            let collectionRef = capability.borrow<&PublicCompositioning>()
-            collectionRef.match(challenger: challenger)
+            let capability = getAccount(matchedHost).getCapability(self.CollectionPublicPath)
+            if let collectionRef = capability.borrow<&Composition>() {
+                collectionRef.match(challenger: challenger)
+                collectionRef.getAllBets()
 
-            emit CompositionMatched(
-                host: matchedHost,
-                challenger: challenger,
-                totalRound: 2,
-                currency: currency,
-                totalOpeningBets: allBets)
-        } else {
-            panic("Match failed, please try again.")
+                emit CompositionMatched(
+                    host: matchedHost,
+                    challenger: challenger.address,
+                    currency: collectionRef.getBetCurrency(),
+                    totalOpeningBets: collectionRef.getAllBets())
+                return true
+            }
         }
+        panic("Match failed, please try again.")
     }
 
     // Matching flags
@@ -129,18 +132,22 @@ pub contract Gomoku {
         pub case white
     }
 
-    pub enum StoneLocation: UInt8 {
+    pub struct StoneLocation {
 
-        pub let x: UInt8
-        pub let y: UInt8
+        pub let x: Int8
+        pub let y: Int8
 
-        init(x: UInt8, y: UInt8) {
+        init(x: Int8, y: Int8) {
             self.x = x
             self.y = y
         }
 
         pub fun key(): String {
-            return x.toString().concat(",").concat(y.toString())
+            return self.x.toString().concat(",").concat(self.y.toString())
+        }
+
+        pub fun description(): String {
+            return "x: ".concat(self.x.toString()).concat(", y: ").concat(self.y.toString())
         }
 
     }
@@ -158,13 +165,21 @@ pub contract Gomoku {
         }
 
         pub fun key(): String {
-            return location.key()
+            return self.location.key()
         }
+    }
+
+    pub enum VerifyDirection: UInt8 {
+        pub case vertical
+        pub case horizontal
+        pub case diagonal // "/"
+        pub case reversedDiagonal // "\"
     }
 
     pub resource interface PublicCompositioning {
         // Script
-        pub fun getTotalBets(round: UInt8): UFix64
+        pub fun getBets(round: UInt8): UFix64
+        pub fun getAllBets(): UFix64
         pub fun getBetCurrency(): String
 
         // Transaction
@@ -173,22 +188,12 @@ pub contract Gomoku {
         pub fun switchRound(nextRoundBet: UFix64)
     }
 
-    pub resource interface PrivateCompositioning {
-        access(contract) fun activateRegistration()
-        access(contract) fun inactivateRegistration()
-
-        access(contract) fun activateMatching()
-        access(contract) fun inactivateMatching()
-    }
-
-    pub resource Composition:
-        PublicCompositioning,
-        PrivateCompositioning
-    {
+    pub resource Composition: PublicCompositioning {
 
         pub let StoragePath: StoragePath
         pub let PublicPath: PublicPath
 
+        pub let boardSize: UInt8
         pub let totalRound: UInt8
         pub var currentRound: UInt8
 
@@ -198,14 +203,15 @@ pub contract Gomoku {
         priv var challenger: Address?
         priv var raisedBets: @[[FungibleToken.Vault]]
         priv var steps: @[[Stone]]
-        priv var locationStoneMap: {String:@Stone}
+        priv var locationStoneMap: {String:StoneColor}
 
         // timeout of block height
-        pub var latestBlockHeight: UFix64
-        pub var blockHeightTimeout: UFix64
+        pub var latestBlockHeight: UInt64
+        pub var blockHeightTimeout: UInt64
 
         init(
             contractAccount: PublicAccount,
+            boardSize: UInt8,
             totalRound: UInt8,
             openingBets: @[FungibleToken.Vault]
         ) {
@@ -217,12 +223,15 @@ pub contract Gomoku {
             self.StoragePath = /storage/gomokuCollection
             self.PublicPath = /public/gomokuCollection
 
+            self.boardSize = boardSize
             self.compositionContractAccount = contractAccount
+            self.challenger = nil
             self.totalRound = totalRound
             self.currentRound = 0
             self.openingBets <- openingBets
             self.raisedBets <- []
             self.steps <- []
+            self.locationStoneMap = {}
             let firstOpeningBet = openingBets[0]
             for index, bet in openingBets {
                 if let flowVault = firstOpeningBet as? @FlowToken.Vault {
@@ -237,11 +246,11 @@ pub contract Gomoku {
                 } else {
                     panic("Only support Flow Token, Blocto Token right now.")
                 }
-                self.raisedBets.append([])
-                self.steps.append([])
+                self.raisedBets.append(<- [])
+                self.steps.append(<- [])
             }
             self.latestBlockHeight = getCurrentBlock().height
-            self.blockHeightTimeout = 60 * 60 * 24 * 7
+            self.blockHeightTimeout = UInt64(60 * 60 * 24 * 7)
         }
 
         // Script
@@ -253,7 +262,7 @@ pub contract Gomoku {
         }
 
         pub fun getAllBets(): UFix64 {
-            var sum: UFix64 = 0
+            var sum: UFix64 = UFix64(0)
             for index, openingBet in self.openingBets {
                 sum = sum + openingBet.balance
                 for raisedBet in self.raisedBets[index] {
@@ -274,12 +283,11 @@ pub contract Gomoku {
                 return "Blocto Token"
             } else if let tUSDTVault = firstOpeningBet as? @TeleportedTetherToken.Vault {
                 return "tUSDT Token"
-            } else {
-                panic("Currency can't be identify.")
             }
+            panic("Currency can't be identify.")
         }
 
-        pub fun getTimeout(): UFix64 {
+        pub fun getTimeout(): UInt64 {
             return self.latestBlockHeight + self.blockHeightTimeout
         }
 
@@ -293,29 +301,10 @@ pub contract Gomoku {
             raisedBet: @FungibleToken.Vault
         ) {
             self.verifyAndStoreStone(stone: <- stone)
-            // todo add raised bet
-        }
-
-        priv fun verifyAndStoreStone(stone: @Stone) {
-            pre {
-                self.steps.length == 2: "Steps length should be 2."
-                self.currentRound <= 1: "Composition only has 2 round each."
-            }
-            let roundSteps = self.steps[self.currentRound]
-            if self.locationStoneMap[stone.key()] == nil {
-                if roundSteps.length % 2 == 0 {
-                    // black stone move
-                    assert(stone.color == StoneColor.black, message: "It should be black side's move.")
-                    
-                } else {
-                    // white stone move
-                    assert(stone.color == StoneColor.white, message: "It should be white side's move.")
-
-                }  
-            } else {
-                panic("This place had been taken.")
-            }
-
+            assert(
+                self.raisedBets.length == Int(self.totalRound),
+                message: "RaisedBets's length should equal to totalRound's length")
+            self.raisedBets[self.currentRound].append(<- raisedBet)
         }
 
         pub fun switchRound(nextRoundBet: UFix64) {
@@ -324,32 +313,257 @@ pub contract Gomoku {
                 self.totalRound - 1 >= self.currentRound + 1: "Next round should not over totalRound."
             }
             post {
-                self.openingBet.length == Int(self.currentRound) + 1: "Count of opening bet should equal to round current round."
+                self.openingBets.length == Int(self.currentRound) + 1: "Count of opening bet should equal to round current round."
             }
             self.currentRound = self.currentRound + 1
-            self.openingBet.append(nextRoundBet)
+            self.openingBets.append(nextRoundBet)
         }
 
-        destroy() {
+        // Private Method
+        priv fun verifyAndStoreStone(stone: @Stone) {
+            pre {
+                self.steps.length == 2: "Steps length should be 2."
+                self.currentRound <= 1: "Composition only has 2 round each."
+            }
+            let roundSteps <- self.steps[self.currentRound]
+
+            // check stone location is within board.
+            let isOnBoard = self.verifyOnBoard(location: stone.location)
+            assert(isOnBoard, message: "Stone location".concat(stone.location.description()).concat(" is invalid."))
+
+            // check location not yet taken.
+            assert(self.locationStoneMap[stone.key()] == nil, message: "This place had been taken.")
+
+            if roundSteps.length % 2 == 0 {
+                // black stone move
+                assert(stone.color == StoneColor.black, message: "It should be black side's turn.")
+            } else {
+                // white stone move
+                assert(stone.color == StoneColor.white, message: "It should be white side's turn.")
+            }
+
+            let stoneColor = stone.color
+            let stoneLocation = stone.location
+            self.locationStoneMap[stone.key()] = stoneColor
+            roundSteps.append(<- stone)
+            self.steps[self.currentRound] <-> roundSteps
+
+            let hasWinner = self.checkWinnerInAllDirection(targetColor: stoneColor, center: stoneLocation)
+            if hasWinner {
+                // event
+                // distribute reward
+            }
+        }
+
+        priv fun verifyOnBoard(location: StoneLocation): Bool {
+            if location.x > Int8(self.boardSize) - Int8(1) {
+                return false
+            }
+            if location.x < Int8(0) {
+                return false
+            }
+            if location.y > Int8(self.boardSize) - Int8(1) {
+                return false
+            }
+            if location.y < Int8(0) {
+                return false
+            }
+            return true
+        }
+
+        priv fun checkWinnerInAllDirection(targetColor: StoneColor, center: StoneLocation): Bool {
+            return self.checkWinner(
+                    targetColor: targetColor,
+                    center: center,
+                    direction: VerifyDirection.vertical)
+                || self.checkWinner(
+                    targetColor: targetColor,
+                    center: center, 
+                    direction: VerifyDirection.horizontal)
+                || self.checkWinner(
+                    targetColor: targetColor,
+                    center: center, 
+                    direction: VerifyDirection.diagonal)
+                || self.checkWinner(
+                    targetColor: targetColor,
+                    center: center, 
+                    direction: VerifyDirection.reversedDiagonal)
+        }
+
+        priv fun checkWinner(
+            targetColor: StoneColor,
+            center: StoneLocation,
+            direction: VerifyDirection
+        ): Bool {
+            // let checkLocations: [StoneLocation] = []
+            var countInRow: UInt8 = 1
+            var shift: Int8 = 1
+            var isFinished: Bool = false
+            switch direction {
+                case VerifyDirection.vertical:
+                    while !isFinished
+                            && shift <= Int8(4)
+                            && center.x - shift >= Int8(0) {
+                        let currentCheckedLocation = StoneLocation(x: center.x - shift, y: center.y)
+                        if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                            if color == targetColor {
+                                countInRow = countInRow + UInt8(1)
+                            } else {
+                                isFinished = true
+                            }
+                        } else {
+                            isFinished = true
+                        }
+                        shift = shift + Int8(1)
+                    }
+                    shift = 1
+                    isFinished = false
+                    while !isFinished
+                            && shift <= Int8(4)
+                            && center.x + shift >= Int8(0) {
+                        let currentCheckedLocation = StoneLocation(x: center.x + shift, y: center.y)
+                        if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                            if color == targetColor {
+                                countInRow = countInRow + UInt8(1)
+                            } else {
+                                isFinished = true
+                            }
+                        } else {
+                            isFinished = true
+                        }
+                        shift = shift + Int8(1)
+                    }
+                case VerifyDirection.horizontal:
+                    while !isFinished
+                            && shift <= Int8(4)
+                            && center.y - shift >= Int8(0) {
+                        let currentCheckedLocation = StoneLocation(x: center.x, y: center.y - shift)
+                        if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                            if color == targetColor {
+                                countInRow = countInRow + UInt8(1)
+                            } else {
+                                isFinished = true
+                            }
+                        } else {
+                            isFinished = true
+                        }
+                        shift = shift + Int8(1)
+                    }
+                    shift = 1
+                    isFinished = false
+                    while !isFinished
+                            && shift <= Int8(4)
+                            && center.y + shift >= Int8(0) {
+                        let currentCheckedLocation = StoneLocation(x: center.x, y: center.y + shift)
+                        if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                            if color == targetColor {
+                                countInRow = countInRow + UInt8(1)
+                            } else {
+                                isFinished = true
+                            }
+                        } else {
+                            isFinished = true
+                        }
+                        shift = shift + Int8(1)
+                    }
+                case VerifyDirection.diagonal:
+                    while !isFinished
+                            && shift <= Int8(4)
+                            && center.x - shift >= Int8(0)
+                            && center.y - shift >= Int8(0) {
+                        let currentCheckedLocation = StoneLocation(x: center.x - shift, y: center.y - shift)
+                        if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                            if color == targetColor {
+                                countInRow = countInRow + UInt8(1)
+                            } else {
+                                isFinished = true
+                            }
+                        } else {
+                            isFinished = true
+                        }
+                        shift = shift + Int8(1)
+                    }
+                    shift = 1
+                    isFinished = false
+                    while !isFinished
+                            && shift <= Int8(4)
+                            && center.x + shift >= Int8(0)
+                            && center.y + shift >= Int8(0) {
+                        let currentCheckedLocation = StoneLocation(x: center.x + shift, y: center.y + shift)
+                        if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                            if color == targetColor {
+                                countInRow = countInRow + UInt8(1)
+                            } else {
+                                isFinished = true
+                            }
+                        } else {
+                            isFinished = true
+                        }
+                        shift = shift + Int8(1)
+                    }
+                case VerifyDirection.reversedDiagonal:
+                    while !isFinished
+                            && shift <= Int8(4)
+                            && center.x - shift >= Int8(0)
+                            && center.y + shift >= Int8(0) {
+                        let currentCheckedLocation = StoneLocation(x: center.x - shift, y: center.y + shift)
+                        if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                            if color == targetColor {
+                                countInRow = countInRow + UInt8(1)
+                            } else {
+                                isFinished = true
+                            }
+                        } else {
+                            isFinished = true
+                        }
+                        shift = shift + Int8(1)
+                    }
+                    shift = 1
+                    isFinished = false
+                    while !isFinished
+                            && shift <= Int8(4)
+                            && center.x + shift >= Int8(0)
+                            && center.y - shift >= Int8(0) {
+                        let currentCheckedLocation = StoneLocation(x: center.x + shift, y: center.y - shift)
+                        if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                            if color == targetColor {
+                                countInRow = countInRow + UInt8(1)
+                            } else {
+                                isFinished = true
+                            }
+                        } else {
+                            isFinished = true
+                        }
+                        shift = shift + Int8(1)
+                    }
+            }
+            return countInRow >= UInt8(5)
+        }
+
+        priv fun recycleBets(_ vaults: @[FungibleToken.Vault]) {
+            let firstOpeningBet = self.openingBets[0]
             for openingBet in self.openingBets {
                 if let flowVault = firstOpeningBet as? @FlowToken.Vault {
                     let capability = self.compositionContractAccount.getCapability(/public/flowTokenReceiver)
                     let flowVaultReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                    flowVaultReference.deposit(flowVault)
+                    flowVaultReference.deposit(<- flowVault)
                 } else if let bltVault = firstOpeningBet as? @BloctoToken.Vault {
                     let capability = self.compositionContractAccount.getCapability(BloctoToken.TokenPublicReceiverPath)
                     let bltVaultReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                    bltVaultReference.deposit(bltVault)
+                    bltVaultReference.deposit(<- bltVault)
                 } else if let tUSDTVault = firstOpeningBet as? @TeleportedTetherToken.Vault {
                     let capability = self.compositionContractAccount.getCapability(TeleportedTetherToken.TokenPublicReceiverPath)
                     let tUSDTVaultReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                    tUSDTVaultReference.deposit(tUSDTVault)
+                    tUSDTVaultReference.deposit(<- tUSDTVault)
                 } else {
                     break
                 }
-                deposit <- openingBet.withdraw(amount: openingBet.balance)
-                self.openingBets.withdraw(amount: )
             }
+        }
+
+        destroy() {
+            self.recycleBets(self.openingBets)
+            self.recycleBets(self.raisedBets)
             destroy self.openingBets
             destroy self.raisedBets
             destroy self.steps
