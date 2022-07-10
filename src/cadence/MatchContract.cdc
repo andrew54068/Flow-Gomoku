@@ -3,8 +3,8 @@ import Crypto
 pub contract MatchContract {
 
     pub struct Matcher: Matching {
-        access(account) var registerActive: Bool
-        access(account) var matchActive: Bool
+        priv var registerActive: Bool
+        priv var matchActive: Bool
 
         // latest not used yet index
         pub var nextIndex: UInt32
@@ -139,13 +139,17 @@ pub contract MatchContract {
             }
         }
 
+        access(account) fun setActivateRegistration(_ active: Bool) {
+            self.registerActive = active
+        }
+
+        access(account) fun setActivateMatching(_ active: Bool) {
+            self.matchActive = active
+        }
+
     }
 
     pub struct interface Matching {
-
-        // Control flags
-        access(account) var registerActive: Bool
-        access(account) var matchActive: Bool
 
         pub var nextIndex: UInt32
         access(account) let addressGroupMap: { String: { MatchStatus: [UInt32] } }
@@ -165,6 +169,9 @@ pub contract MatchContract {
             challenger: AuthAccount
         ): Address?
 
+        // admin
+        access(account) fun setActivateRegistration(_ active: Bool)
+        access(account) fun setActivateMatching(_ active: Bool)
     }
 
     pub enum MatchStatus: UInt8 {

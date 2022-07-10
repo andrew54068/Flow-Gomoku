@@ -1,15 +1,21 @@
 {
 	"contracts": {
-		"MatchContract": "./src/cadence/MatchContract.cdc",
 		"FungibleToken": "./src/cadence/FungibleToken.cdc",
-		"NonFungibleToken": "./src/cadence/NonFungibleToken.cdc"
+		"NonFungibleToken": "./src/cadence/NonFungibleToken.cdc",
+		"TeleportedTetherToken": "./src/cadence/TeleportedTetherToken.cdc",
+		"BloctoToken": "./src/cadence/BloctoToken.cdc",
+		"MatchContract": "./src/cadence/MatchContract.cdc",
+		"Gomoku": "./src/cadence/Gomoku.cdc"
 	},
 	"deployments": {
 		"emulator": {
 			"emulator-account": [
-				"MatchContract",
 				"FungibleToken",
-				"NonFungibleToken"
+				"NonFungibleToken",
+				"TeleportedTetherToken",
+				"BloctoToken",
+				"MatchContract",
+				"Gomoku"
 			]
 		}
 	},

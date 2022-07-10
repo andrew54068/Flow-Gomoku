@@ -1,9 +1,9 @@
 import Crypto
 import MatchContract from "./MatchContract.cdc"
-import NonFungibleToken from "./NonFungibleToken.cdc"
 import FungibleToken from "./FungibleToken.cdc"
 import BloctoToken from "./BloctoToken.cdc"
-import FlowToken from "./FlowToken.cdc"
+import FlowToken from 0x0ae53cb6e3f42a79
+// import FlowToken from "./FlowToken.cdc"
 import TeleportedTetherToken from "./TeleportedTetherToken.cdc"
 
 pub contract Gomoku {
@@ -26,22 +26,27 @@ pub contract Gomoku {
         currency: String,
         totalOpeningBets: UFix64)
 
+    // 
+    pub event BetType(
+        type: Type,
+        balance: UFix64)
+
     init() {
         self.CollectionStoragePath = /storage/gomokuCollection
         self.CollectionPublicPath = /public/gomokuCollection
         self.compositionMatcher = MatchContract.Matcher()
 
-        if self.account.borrow<&FlowToken.Vault{FungibleToken.Receiver}>(from: /storage/flowTokenVault) == nil {
+        if self.account.borrow<&FlowToken.Vault>(from: /storage/flowTokenVault) == nil {
             let flowVault <- FlowToken.createEmptyVault()
             self.account.save(<- flowVault, to: /storage/flowTokenVault)
         }
 
-        if self.account.borrow<&BloctoToken.Vault{FungibleToken.Receiver}>(from: BloctoToken.TokenStoragePath) == nil {
+        if self.account.borrow<&BloctoToken.Vault>(from: BloctoToken.TokenStoragePath) == nil {
             let bltVault <- BloctoToken.createEmptyVault()
             self.account.save(<- bltVault, to: BloctoToken.TokenStoragePath)
         }
 
-        if self.account.borrow<&TeleportedTetherToken.Vault{FungibleToken.Receiver}>(from: TeleportedTetherToken.TokenStoragePath) == nil {
+        if self.account.borrow<&TeleportedTetherToken.Vault>(from: TeleportedTetherToken.TokenStoragePath) == nil {
             let tUSDTVault <- TeleportedTetherToken.createEmptyVault()
             self.account.save(<- tUSDTVault, to: TeleportedTetherToken.TokenStoragePath)
         }
@@ -63,22 +68,21 @@ pub contract Gomoku {
         self.compositionMatcher.register(host: host)
 
         let composition: @Composition <- create Composition(
-            contractAccount: getAccount(self.account.address),
+            contractAddress: self.account.address,
             boardSize: 15,
-            totalRound: 2,
             openingBets: <- eachBets)
 
         let currency = composition.getBetCurrency()
         let totalBets = composition.getAllBets()
 
         // Create a new Gomoku and put it in storage
-        host.save(<- composition, to: self.CollectionStoragePath)
+        host.save(<-composition, to: self.CollectionStoragePath)
 
         // Create a public capability to the Vault that only exposes
         // the deposit function through the Receiver interface
         host.link<&Gomoku.Composition{Gomoku.PublicCompositioning}>(
-            self.CollectionStoragePath,
-            target: self.CollectionPublicPath
+            self.CollectionPublicPath,
+            target: self.CollectionStoragePath
         )
 
         emit CompositionCreated(
@@ -110,20 +114,12 @@ pub contract Gomoku {
     }
 
     // Matching flags
-    access(account) fun activateRegistration() {
-        self.compositionMatcher.registerActive = true
+    access(account) fun setActivateRegistration(_ active: Bool) {
+        self.compositionMatcher.setActivateRegistration(active)
     }
 
-    access(account) fun inactivateRegistration() {
-        self.compositionMatcher.registerActive = false
-    }
-
-    access(account) fun activateMatching() {
-        self.compositionMatcher.matchActive = true
-    }
-
-    access(account) fun inactivateMatching() {
-        self.compositionMatcher.matchActive = false
+    access(account) fun setActivateMatching(_ active: Bool) {
+        self.compositionMatcher.setActivateMatching(active)
     }
 
     pub enum StoneColor: UInt8 {
@@ -185,7 +181,7 @@ pub contract Gomoku {
         // Transaction
         pub fun match(challenger: AuthAccount)
 
-        pub fun switchRound(nextRoundBet: UFix64)
+        pub fun switchRound()
     }
 
     pub resource Composition: PublicCompositioning {
@@ -199,7 +195,7 @@ pub contract Gomoku {
 
         pub var openingBets: @[FungibleToken.Vault]
 
-        priv var compositionContractAccount: PublicAccount
+        priv var compositionContractAddress: Address
         priv var challenger: Address?
         priv var raisedBets: @[[FungibleToken.Vault]]
         priv var steps: @[[Stone]]
@@ -210,47 +206,50 @@ pub contract Gomoku {
         pub var blockHeightTimeout: UInt64
 
         init(
-            contractAccount: PublicAccount,
+            contractAddress: Address,
             boardSize: UInt8,
-            totalRound: UInt8,
             openingBets: @[FungibleToken.Vault]
         ) {
             pre {
-                totalRound == 2: "Total round should be 2 and take turns to make first move (black stone) for fairness."
-                Int(totalRound) == openingBets.length: "Total round should be equal to openingBets length."
+                openingBets.length == 2: "Total round should be 2 and take turns to make first move (black stone) for fairness."
             }
 
             self.StoragePath = /storage/gomokuCollection
             self.PublicPath = /public/gomokuCollection
 
             self.boardSize = boardSize
-            self.compositionContractAccount = contractAccount
+            self.compositionContractAddress = contractAddress
             self.challenger = nil
-            self.totalRound = totalRound
+            self.totalRound = UInt8(openingBets.length)
             self.currentRound = 0
             self.openingBets <- openingBets
             self.raisedBets <- []
             self.steps <- []
             self.locationStoneMap = {}
-            let firstOpeningBet = openingBets[0]
-            for index, bet in openingBets {
-                if let flowVault = firstOpeningBet as? @FlowToken.Vault {
-                    let vault = bet as? @FlowToken.Vault
-                    assert(vault != nil, message: "Every bets should be FlowToken.")
-                } else if let bltVault = firstOpeningBet as? @BloctoToken.Vault {
-                    let vault = bet as? @BloctoToken.Vault
-                    assert(vault != nil, message: "Every bets should be BloctoToken.")
-                } else if let tUSDTVault = firstOpeningBet as? @TeleportedTetherToken.Vault {
-                    let vault = bet as? @TeleportedTetherToken.Vault
-                    assert(vault != nil, message: "Every bets should be TeleportedTetherToken.")
-                } else {
-                    panic("Only support Flow Token, Blocto Token right now.")
-                }
+            let firstOpeningBetType = self.openingBets[0].getType()
+
+            var index: Int = 0
+            while index < self.openingBets.length {
+                let indexType = self.openingBets[index].getType()
+                assert(
+                    firstOpeningBetType == indexType,
+                    message: "Every bets should be same token "
+                        .concat(firstOpeningBetType.identifier)
+                        .concat(" but found ")
+                        .concat(indexType.identifier)
+                        .concat(" at index ")
+                        .concat(index.toString())
+                        .concat(" instead."))
                 self.raisedBets.append(<- [])
                 self.steps.append(<- [])
+                index = index + 1
             }
+
             self.latestBlockHeight = getCurrentBlock().height
             self.blockHeightTimeout = UInt64(60 * 60 * 24 * 7)
+
+            let isValidVault = self.checkVaultValid(firstOpeningBetType)
+            assert(isValidVault, message: "Only support Flow Token, Blocto Token, tUSDT right now.")
         }
 
         // Script
@@ -258,15 +257,28 @@ pub contract Gomoku {
             pre {
                 round < self.totalRound - 1: "Input round (start from 0) should be less than or equal to total rounds."
             }
-            return self.openingBets[round].balance + self.raisedBets[round].balance
+            var totalRaisedBets = UFix64(0)
+            var index = 0
+            while index < self.raisedBets[round].length {
+                let raisedBet = &self.raisedBets[round][index] as &FungibleToken.Vault
+                totalRaisedBets = totalRaisedBets + raisedBet.balance
+                index = index + 1
+            }
+            return self.openingBets[round].balance + totalRaisedBets
         }
 
         pub fun getAllBets(): UFix64 {
-            var sum: UFix64 = UFix64(0)
-            for index, openingBet in self.openingBets {
+            var sum = UFix64(0)
+            var index = 0
+            while index < self.openingBets.length {
+                let openingBet = &self.openingBets[index] as &FungibleToken.Vault
                 sum = sum + openingBet.balance
-                for raisedBet in self.raisedBets[index] {
+                index = index + 1
+                var innerIndex = 0
+                while innerIndex < self.raisedBets[index].length {
+                    let raisedBet = &self.raisedBets[index][innerIndex] as &FungibleToken.Vault
                     sum = sum + raisedBet.balance
+                    innerIndex = innerIndex + 1
                 }
             }
             return sum
@@ -276,12 +288,12 @@ pub contract Gomoku {
             pre {
                 self.openingBets.length > 0: "Opening bet not found."
             }
-            let firstOpeningBet = self.openingBets[0]
-            if let flowVault = firstOpeningBet as? @FlowToken.Vault {
+            let openingBetType = self.openingBets[0].getType()
+            if openingBetType == Type<@FlowToken.Vault>() {
                 return "Flow Token"
-            } else if let bltVault = firstOpeningBet as? @BloctoToken.Vault {
+            } else if openingBetType == Type<@BloctoToken.Vault>() {
                 return "Blocto Token"
-            } else if let tUSDTVault = firstOpeningBet as? @TeleportedTetherToken.Vault {
+            } else if openingBetType == Type<@TeleportedTetherToken.Vault>() {
                 return "tUSDT Token"
             }
             panic("Currency can't be identify.")
@@ -300,32 +312,53 @@ pub contract Gomoku {
             stone: @Stone,
             raisedBet: @FungibleToken.Vault
         ) {
-            self.verifyAndStoreStone(stone: <- stone)
-            assert(
-                self.raisedBets.length == Int(self.totalRound),
-                message: "RaisedBets's length should equal to totalRound's length")
+            // check raise bet type
+            let openingBetType = self.openingBets[self.currentRound].getType()
+            assert(raisedBet.getType() == openingBetType, message: "RaisedBets's type should be equal to opening bet's.")
             self.raisedBets[self.currentRound].append(<- raisedBet)
+
+            let stoneRef = &stone as &Stone
+
+            // validate move
+            self.verifyAndStoreStone(stone: <- stone)
+
+            let hasWinner = self.checkWinnerInAllDirection(
+                targetColor: stoneRef.color,
+                center: stoneRef.location)
+            if hasWinner {
+                // event
+                // end of current round
+                if self.currentRound + UInt8(1) < self.totalRound {
+                    self.switchRound()
+                } else {
+                    // end of game
+                    // distribute reward
+                }
+            }
         }
 
-        pub fun switchRound(nextRoundBet: UFix64) {
+        pub fun switchRound() {
             pre {
-                self.totalRound - 1 > self.currentRound: "This is already the final round."
-                self.totalRound - 1 >= self.currentRound + 1: "Next round should not over totalRound."
-            }
-            post {
-                self.openingBets.length == Int(self.currentRound) + 1: "Count of opening bet should equal to round current round."
+                self.totalRound > self.currentRound + 1: "Next round should not over totalRound."
             }
             self.currentRound = self.currentRound + 1
-            self.openingBets.append(nextRoundBet)
         }
 
         // Private Method
+        priv fun checkVaultValid(_ type: Type): Bool {
+            return [
+                Type<@FlowToken.Vault>(),
+                Type<@BloctoToken.Vault>(),
+                Type<@TeleportedTetherToken.Vault>()
+            ].contains(type)
+        }
+
         priv fun verifyAndStoreStone(stone: @Stone) {
             pre {
                 self.steps.length == 2: "Steps length should be 2."
                 self.currentRound <= 1: "Composition only has 2 round each."
             }
-            let roundSteps <- self.steps[self.currentRound]
+            let roundSteps = &self.steps[self.currentRound] as &[Stone]
 
             // check stone location is within board.
             let isOnBoard = self.verifyOnBoard(location: stone.location)
@@ -345,14 +378,7 @@ pub contract Gomoku {
             let stoneColor = stone.color
             let stoneLocation = stone.location
             self.locationStoneMap[stone.key()] = stoneColor
-            roundSteps.append(<- stone)
-            self.steps[self.currentRound] <-> roundSteps
-
-            let hasWinner = self.checkWinnerInAllDirection(targetColor: stoneColor, center: stoneLocation)
-            if hasWinner {
-                // event
-                // distribute reward
-            }
+            self.steps[self.currentRound].append(<- stone)
         }
 
         priv fun verifyOnBoard(location: StoneLocation): Bool {
@@ -540,30 +566,49 @@ pub contract Gomoku {
             return countInRow >= UInt8(5)
         }
 
-        priv fun recycleBets(_ vaults: @[FungibleToken.Vault]) {
-            let firstOpeningBet = self.openingBets[0]
-            for openingBet in self.openingBets {
-                if let flowVault = firstOpeningBet as? @FlowToken.Vault {
-                    let capability = self.compositionContractAccount.getCapability(/public/flowTokenReceiver)
+        priv fun recycleBets() {
+            var roundIndex = 0
+            while roundIndex < self.openingBets.length {
+                var index = 0
+                let openingBetType = self.openingBets[roundIndex].getType()
+                let compositionContractAccount = getAccount(self.compositionContractAddress)
+                if openingBetType == Type<@FlowToken.Vault>() {
+                    let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(/public/flowTokenReceiver)
                     let flowVaultReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                    flowVaultReference.deposit(<- flowVault)
-                } else if let bltVault = firstOpeningBet as? @BloctoToken.Vault {
-                    let capability = self.compositionContractAccount.getCapability(BloctoToken.TokenPublicReceiverPath)
+                    flowVaultReference.deposit(from: <- self.openingBets.remove(at: roundIndex))
+                    while index < self.raisedBets[roundIndex].length {
+                        if self.raisedBets[roundIndex][index].getType() == openingBetType {
+                            flowVaultReference.deposit(from: <- self.raisedBets[roundIndex].remove(at: index))
+                        }
+                        index = index + 1
+                    }
+                } else if openingBetType == Type<@BloctoToken.Vault>() {
+                    let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(BloctoToken.TokenPublicReceiverPath)
                     let bltVaultReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                    bltVaultReference.deposit(<- bltVault)
-                } else if let tUSDTVault = firstOpeningBet as? @TeleportedTetherToken.Vault {
-                    let capability = self.compositionContractAccount.getCapability(TeleportedTetherToken.TokenPublicReceiverPath)
+                    bltVaultReference.deposit(from: <- self.openingBets.remove(at: roundIndex))
+                    while index < self.raisedBets[roundIndex].length {
+                        if self.raisedBets[roundIndex][index].getType() == openingBetType {
+                            bltVaultReference.deposit(from: <- self.raisedBets[roundIndex].remove(at: index))
+                        }
+                        index = index + 1
+                    }
+                } else if openingBetType == Type<@TeleportedTetherToken.Vault>() {
+                    let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(TeleportedTetherToken.TokenPublicReceiverPath)
                     let tUSDTVaultReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                    tUSDTVaultReference.deposit(<- tUSDTVault)
-                } else {
-                    break
+                    tUSDTVaultReference.deposit(from: <- self.openingBets.remove(at: roundIndex))
+                    while index < self.raisedBets[roundIndex].length {
+                        if self.raisedBets[roundIndex][index].getType() == openingBetType {
+                            tUSDTVaultReference.deposit(from: <- self.raisedBets[roundIndex].remove(at: index))
+                        }
+                        index = index + 1
+                    }
                 }
+                roundIndex = roundIndex + 1
             }
         }
 
         destroy() {
-            self.recycleBets(self.openingBets)
-            self.recycleBets(self.raisedBets)
+            self.recycleBets()
             destroy self.openingBets
             destroy self.raisedBets
             destroy self.steps
