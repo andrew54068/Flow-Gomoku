@@ -1,26 +1,17 @@
 import path from "path";
-import { emulator, init, getAccountAddress } from "flow-js-testing";
+import { emulator, init, getAccountAddress } from "@onflow/flow-js-testing";
 
 // Increase timeout if your tests failing due to timeout
 jest.setTimeout(10000);
 
 describe("basic-test", () => {
   beforeEach(async () => {
-    const basePath = path.resolve(__dirname, "../cadence");
-    // You can specify different port to parallelize execution of describe blocks
-    const port = 8080;
-    // Setting logging flag to true will pipe emulator output to console
-    const logging = true;
+    const basePath = path.resolve(__dirname, "./src/cadence");
 
-    await init(basePath, { port });
-
-    // emulator.setLogging(true);
-    // try {
-    //   await emulator.start();
-    // } catch (e) {
-    //   console.log(e)
-    // }
-    await emulator.start(port, logging);
+    await init(basePath)
+    await emulator.start({
+      logging: true,
+    })
   });
 
   //  Stop emulator, so it could be restarted
