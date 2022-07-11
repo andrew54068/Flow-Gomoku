@@ -5,7 +5,6 @@
 			"serviceAccount": "emulator-account"
 		}
 	},
-	"contracts": {},
 	"networks": {
 		"emulator": "127.0.0.1:3569",
 		"mainnet": "access.mainnet.nodes.onflow.org:9000",
@@ -17,5 +16,24 @@
 			"key": "0e350c60ed417c6b5fa11e54b3287a91106e464943d000ed4b05d27cc2b51c00"
 		}
 	},
-	"deployments": {}
+	"contracts": {
+		"FungibleToken": "./src/cadence/contracts/FungibleToken.cdc",
+		"NonFungibleToken": "./src/cadence/contracts/NonFungibleToken.cdc",
+		"TeleportedTetherToken": "./src/cadence/contracts/TeleportedTetherToken.cdc",
+		"BloctoToken": "./src/cadence/contracts/BloctoToken.cdc",
+		"MatchContract": "./src/cadence/contracts/MatchContract.cdc",
+		"Gomoku": "./src/cadence/contracts/Gomoku.cdc"
+	},
+	"deployments": {
+		"emulator": {
+			"emulator-account": [
+				"FungibleToken",
+				"NonFungibleToken",
+				"TeleportedTetherToken",
+				"BloctoToken",
+				"MatchContract",
+				"Gomoku"
+			]
+		}
+	}
 }

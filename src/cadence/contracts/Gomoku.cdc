@@ -1,4 +1,3 @@
-import Crypto
 import MatchContract from "./MatchContract.cdc"
 import FungibleToken from "./FungibleToken.cdc"
 import BloctoToken from "./BloctoToken.cdc"
@@ -11,8 +10,6 @@ pub contract Gomoku {
     // path
     pub let CollectionStoragePath: StoragePath
     pub let CollectionPublicPath: PublicPath
-
-    access(account) let compositionMatcher: AnyStruct{MatchContract.Matching}
 
     pub event CompositionCreated(
         host: Address,
@@ -34,7 +31,6 @@ pub contract Gomoku {
     init() {
         self.CollectionStoragePath = /storage/gomokuCollection
         self.CollectionPublicPath = /public/gomokuCollection
-        self.compositionMatcher = MatchContract.Matcher()
 
         if self.account.borrow<&FlowToken.Vault>(from: /storage/flowTokenVault) == nil {
             let flowVault <- FlowToken.createEmptyVault()
@@ -54,10 +50,10 @@ pub contract Gomoku {
 
     // Script
     pub fun getWaitingIndex(hostAddress: Address): UInt32? {
-        return self.compositionMatcher.getWaitingIndex(hostAddress: hostAddress)
+        return MatchContract.getWaitingIndex(hostAddress: hostAddress)
     }
     pub fun getRandomWaitingIndex(): UInt32? {
-        return self.compositionMatcher.getRandomWaitingIndex()
+        return MatchContract.getRandomWaitingIndex()
     }
 
     // Transaction
@@ -65,7 +61,7 @@ pub contract Gomoku {
         host: AuthAccount,
         eachBets: @[FungibleToken.Vault],
     ) {
-        self.compositionMatcher.register(host: host)
+        MatchContract.register(host: host)
 
         let composition: @Composition <- create Composition(
             contractAddress: self.account.address,
@@ -95,7 +91,7 @@ pub contract Gomoku {
         index: UInt32, 
         challenger: AuthAccount
     ): Bool {
-        if let matchedHost = self.compositionMatcher.match(index: index, challenger: challenger) {
+        if let matchedHost = MatchContract.match(index: index, challenger: challenger) {
 
             let capability = getAccount(matchedHost).getCapability(self.CollectionPublicPath)
             if let collectionRef = capability.borrow<&Composition>() {
@@ -111,15 +107,6 @@ pub contract Gomoku {
             }
         }
         panic("Match failed, please try again.")
-    }
-
-    // Matching flags
-    access(account) fun setActivateRegistration(_ active: Bool) {
-        self.compositionMatcher.setActivateRegistration(active)
-    }
-
-    access(account) fun setActivateMatching(_ active: Bool) {
-        self.compositionMatcher.setActivateMatching(active)
     }
 
     pub enum StoneColor: UInt8 {
