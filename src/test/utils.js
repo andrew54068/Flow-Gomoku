@@ -10,7 +10,7 @@ export const expectContractDeployed = (deploymentResult) => {
 }
 
 export const deployMatcher = async () => {
-  const to = await getAccountAddress("emulator-account")
+  const to = await getAccountAddress("Alice")
 
   // We assume there is a file on "../cadence/contracts/MatchContract.cdc" path
   const name = "MatchContract"

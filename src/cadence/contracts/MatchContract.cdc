@@ -8,9 +8,9 @@ pub contract MatchContract {
     priv var matchActive: Bool
 
     // latest not used yet index
-    pub var nextIndex: UInt32
-    access(account) let addressGroupMap: { String: { MatchContract.MatchStatus: [UInt32] } }
-    access(account) let indexAddressMap: { UInt32: { MatchContract.MatchRole: Address } }
+    priv var nextIndex: UInt32
+    access(account) let addressGroupMap: { String: { MatchStatus: [UInt32] } }
+    access(account) let indexAddressMap: { UInt32: { MatchRole: Address } }
     access(account) let waitingIndices: [UInt32]
     access(account) let matchedIndices: [UInt32]
 
@@ -71,6 +71,32 @@ pub contract MatchContract {
         }
     }
 
+    pub fun getNextIndex(): UInt32 {
+        return self.nextIndex
+    }
+
+    pub fun getWaiting(by address: Address): [UInt32] {
+        let key = address.toString().toLower()
+        let addressGroup = self.addressGroupMap[key] ?? {}
+        return addressGroup[MatchStatus.waiting] ?? []
+    }
+
+    pub fun getMatched(by address: Address): [UInt32] {
+        let key = address.toString().toLower()
+        let addressGroup = self.addressGroupMap[key] ?? {}
+        return addressGroup[MatchStatus.matched] ?? []
+    }
+
+    pub fun getHostAddress(by index: UInt32): Address? {
+        let roleAddressMap = self.indexAddressMap[index] ?? {}
+        return roleAddressMap[MatchRole.host]
+    }
+
+    pub fun getChallengerAddress(by index: UInt32): Address? {
+        let roleAddressMap = self.indexAddressMap[index] ?? {}
+        return roleAddressMap[MatchRole.challenger]
+    }
+
     // Transaction
 
     // Register a waiting match.
@@ -111,46 +137,50 @@ pub contract MatchContract {
             self.matchActive: "Matching is not active."
             self.indexAddressMap.keys.contains(index): "Index not found in indexAddressMap"
         }
-        let addresses = self.indexAddressMap[index] ?? {}
-        assert(addresses[MatchRole.host] != nil, message: "Host not found for this index.")
-        let hostAddress = addresses[MatchRole.host]!
+        let roleAddressMap = self.indexAddressMap[index] ?? {}
+        assert(roleAddressMap[MatchRole.host] != nil, message: "Host not found for this index.")
+        assert(roleAddressMap[MatchRole.challenger] == nil, message: "Challenger should not exist in indexAddressMap before matching.")
+        roleAddressMap[MatchRole.challenger] = challenger.address
+        self.indexAddressMap[index] = roleAddressMap
+
+        let hostAddress = roleAddressMap[MatchRole.host]!
         let hostKey = hostAddress.toString().toLower()
-        let matchGroups = self.addressGroupMap[hostKey] ?? {}
-        let waitingGroup: [UInt32] = matchGroups[MatchStatus.waiting] ?? []
+        let addressGroup = self.addressGroupMap[hostKey] ?? {}
+        let waitingGroup: [UInt32] = addressGroup[MatchStatus.waiting] ?? []
         assert(waitingGroup.length > 0, message: hostAddress.toString().concat("'s waiting group length should over 0"))
-        assert(waitingGroup.contains(index), message: hostAddress.toString().concat(" not contain index: ").concat(index.toString()))
 
         if let firstIndex: Int = waitingGroup.firstIndex(of: index) {
             let matchIndex = waitingGroup.remove(at: firstIndex)
+            addressGroup[MatchStatus.waiting] = waitingGroup
             assert(matchIndex == index, message: "Match index not equal.")
-            let matchedGroup: [UInt32] = matchGroups[MatchStatus.matched] ?? []
+            let matchedGroup: [UInt32] = addressGroup[MatchStatus.matched] ?? []
             matchedGroup.append(matchIndex)
-            matchGroups[MatchStatus.matched] = matchedGroup
-            self.addressGroupMap[hostKey] = matchGroups
+            addressGroup[MatchStatus.matched] = matchedGroup
+            self.addressGroupMap[hostKey] = addressGroup
 
-            let addressGroup = self.indexAddressMap[matchIndex] ?? {}
-            assert(addressGroup[MatchRole.host] != nil, message: "Host should exist in indexAddressMap before matching.")
-            assert(addressGroup[MatchRole.host] == hostAddress, message: "Host should be ".concat(hostAddress.toString()).concat("."))
-            assert(addressGroup[MatchRole.challenger] == nil, message: "Challenger should not exist in indexAddressMap before matching.")
-            addressGroup[MatchRole.challenger] = challenger.address
-            self.indexAddressMap[matchIndex] = addressGroup
-            assert(self.indexAddressMap[matchIndex]![MatchRole.challenger] == challenger.address, message: "Challenger should not exist in indexAddressMap before matching.")
+            let challengerAddress = challenger.address
+            let challengerKey = challengerAddress.toString().toLower()
+            let challengerAddressGroup = self.addressGroupMap[challengerKey] ?? {}
+            let indices = challengerAddressGroup[MatchStatus.matched] ?? []
+            indices.append(index)
+            challengerAddressGroup[MatchStatus.matched] = indices
+            self.addressGroupMap[challengerKey] = challengerAddressGroup
 
             assert(self.waitingIndices.contains(matchIndex), message: "WaitingIndices should include ".concat(matchIndex.toString()).concat(" before matched."))
             assert(self.matchedIndices.contains(matchIndex) == false, message: "MatchedIndices should not include ".concat(matchIndex.toString()).concat(" before matched."))
             if let waitingIndex = self.waitingIndices.firstIndex(of: matchIndex) {
                 let matchedIndex = self.waitingIndices.remove(at: waitingIndex)
                 self.matchedIndices.append(matchedIndex)
+                assert(self.waitingIndices.contains(matchIndex) == false, message: "WaitingIndices should not include ".concat(matchIndex.toString()).concat(" after matched."))
+                assert(self.matchedIndices.contains(matchIndex), message: "MatchedIndices should include ".concat(matchIndex.toString()).concat(" after matched."))
+                return hostAddress
             } else {
                 panic("MatchIndex ".concat(matchIndex.toString()).concat(" should be found in waitingIndices"))
             }
-            self.matchedIndices.append(matchIndex)
-            assert(self.waitingIndices.contains(matchIndex), message: "WaitingIndices should not include ".concat(matchIndex.toString()).concat(" after matched."))
-            assert(self.matchedIndices.contains(matchIndex), message: "MatchedIndices should include ".concat(matchIndex.toString()).concat(" after matched."))
-            return hostAddress
         } else {
-            return nil
+            panic(hostAddress.toString().concat(" not contain index: ").concat(index.toString()))
         }
+        return nil
     }
 
     pub enum MatchStatus: UInt8 {

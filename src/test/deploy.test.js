@@ -16,7 +16,7 @@ describe("Deploy Contracts", () => {
 
     await init(basePath)
     await emulator.start({
-      logging: true,
+      logging: false,
     })
   });
 
@@ -33,7 +33,7 @@ describe("Deploy Contracts", () => {
 
   test("Depoly Gomoku", async () => {
     await deployMatcher()
-    const to = await getAccountAddress("emulator-account")
+    const to = await getAccountAddress("Alice")
 
     // We assume there is a file on "../cadence/contracts/MatchContract.cdc" path
     const names = [

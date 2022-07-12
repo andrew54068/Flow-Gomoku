@@ -8,9 +8,6 @@ transaction() {
   }
 
   execute {
-    let matchAdmin <- self.signer.load<@MatchContract.Admin>(from: MatchContract.AdminStoragePath)
-    matchAdmin?.setActivateRegistration(true)
-    self.signer.save(<- matchAdmin, to: MatchContract.AdminStoragePath)
     MatchContract.register(host: self.signer)
   }
 }
