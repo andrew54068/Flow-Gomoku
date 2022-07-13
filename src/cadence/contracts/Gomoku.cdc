@@ -49,9 +49,10 @@ pub contract Gomoku {
     }
 
     // Script
-    pub fun getWaitingIndex(hostAddress: Address): UInt32? {
-        return MatchContract.getWaitingIndex(hostAddress: hostAddress)
+    pub fun getFirstWaitingIndex(hostAddress: Address): UInt32? {
+        return MatchContract.getFirstWaitingIndex(hostAddress: hostAddress)
     }
+
     pub fun getRandomWaitingIndex(): UInt32? {
         return MatchContract.getRandomWaitingIndex()
     }

@@ -4,15 +4,21 @@ pub contract MatchContract {
 
     pub let AdminStoragePath: StoragePath
 
+    pub let waitingIndices: [UInt32]
+    pub let matchedIndices: [UInt32]
+
     priv var registerActive: Bool
     priv var matchActive: Bool
 
     // latest not used yet index
     priv var nextIndex: UInt32
+
+    // if using pub let other can still modify by such transaction
+    // execute {
+    //   MatchContract.indexAddressMap[0]?.remove(key: MatchContract.MatchRole.host)
+    // }
     access(account) let addressGroupMap: { String: { MatchStatus: [UInt32] } }
     access(account) let indexAddressMap: { UInt32: { MatchRole: Address } }
-    access(account) let waitingIndices: [UInt32]
-    access(account) let matchedIndices: [UInt32]
 
     pub resource Admin {
         pub fun setActivateRegistration(_ active: Bool) {
@@ -40,7 +46,7 @@ pub contract MatchContract {
     // Script
 
     // Return oldest waiting index as well as first index of waiting group of specific address.
-    pub fun getWaitingIndex(hostAddress: Address): UInt32? {
+    pub fun getFirstWaitingIndex(hostAddress: Address): UInt32? {
         let key = hostAddress.toString().toLower()
         let matchGroups = self.addressGroupMap[key] ?? {}
         let waitingGroup = matchGroups[MatchStatus.waiting] ?? []
