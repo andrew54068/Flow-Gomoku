@@ -106,12 +106,11 @@ pub contract MatchContract {
     // Transaction
 
     // Register a waiting match.
-    pub fun register(host: AuthAccount) {
+    pub fun register(host: Address): UInt32 {
         pre {
             self.registerActive: "Registration is not active."
         }
-        let hostAddress = host.address
-        let key = hostAddress.toString().toLower()
+        let key = host.toString().toLower()
 
         let matchGroups = self.addressGroupMap[key] ?? {}
         let waitingGroup: [UInt32] = matchGroups[MatchStatus.waiting] ?? []
@@ -122,22 +121,22 @@ pub contract MatchContract {
         matchGroups[MatchStatus.waiting] = waitingGroup
         self.addressGroupMap[key] = matchGroups
 
-        self.indexAddressMap[currentIndex] = { MatchRole.host: hostAddress }
+        self.indexAddressMap[currentIndex] = { MatchRole.host: host }
         self.waitingIndices.append(currentIndex)
 
         if currentIndex == UInt32.max {
             // Indices is using out.
             self.registerActive = false
-            return 
         } else {
             self.nextIndex = currentIndex + 1
         }
+        return currentIndex
     }
 
     // Must match with specific index in case host register slightly before.
-    pub fun match(
+    access(account) fun match(
         index: UInt32,
-        challenger: AuthAccount
+        challengerAddress: Address
     ): Address? {
         pre {
             self.matchActive: "Matching is not active."
@@ -145,8 +144,8 @@ pub contract MatchContract {
         }
         let roleAddressMap = self.indexAddressMap[index] ?? {}
         assert(roleAddressMap[MatchRole.host] != nil, message: "Host not found for this index.")
-        assert(roleAddressMap[MatchRole.challenger] == nil, message: "Challenger should not exist in indexAddressMap before matching.")
-        roleAddressMap[MatchRole.challenger] = challenger.address
+        assert(roleAddressMap[MatchRole.challenger] == nil, message: "Challenger already exist.")
+        roleAddressMap[MatchRole.challenger] = challengerAddress
         self.indexAddressMap[index] = roleAddressMap
 
         let hostAddress = roleAddressMap[MatchRole.host]!
@@ -164,7 +163,7 @@ pub contract MatchContract {
             addressGroup[MatchStatus.matched] = matchedGroup
             self.addressGroupMap[hostKey] = addressGroup
 
-            let challengerAddress = challenger.address
+            let challengerAddress = challengerAddress
             let challengerKey = challengerAddress.toString().toLower()
             let challengerAddressGroup = self.addressGroupMap[challengerKey] ?? {}
             let indices = challengerAddressGroup[MatchStatus.matched] ?? []

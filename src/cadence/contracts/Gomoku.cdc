@@ -1,5 +1,6 @@
 import MatchContract from "./MatchContract.cdc"
 import FungibleToken from "./FungibleToken.cdc"
+import NonFungibleToken from "./NonFungibleToken.cdc"
 import BloctoToken from "./BloctoToken.cdc"
 import FlowToken from 0x0ae53cb6e3f42a79
 // import FlowToken from "./FlowToken.cdc"
@@ -14,14 +15,14 @@ pub contract Gomoku {
     pub event CompositionCreated(
         host: Address,
         currency: String,
-        totalBets: UFix64)
+        hostOpeningBet: UFix64)
 
     // Event that is emitted when the contract is created
     pub event CompositionMatched(
         host: Address,
         challenger: Address,
         currency: String,
-        totalOpeningBets: UFix64)
+        openingBet: UFix64)
 
     // 
     pub event BetType(
@@ -48,66 +49,70 @@ pub contract Gomoku {
         }
     }
 
-    // Script
-    pub fun getFirstWaitingIndex(hostAddress: Address): UInt32? {
-        return MatchContract.getFirstWaitingIndex(hostAddress: hostAddress)
-    }
-
-    pub fun getRandomWaitingIndex(): UInt32? {
-        return MatchContract.getRandomWaitingIndex()
-    }
-
     // Transaction
     pub fun register(
-        host: AuthAccount,
-        eachBets: @[FungibleToken.Vault],
-    ) {
-        MatchContract.register(host: host)
+        host: Address,
+        openingBet: @FungibleToken.Vault,
+    ): @Composition {
+        let index = MatchContract.register(host: host)
 
         let composition: @Composition <- create Composition(
+            id: index,
+            host: host,
             contractAddress: self.account.address,
             boardSize: 15,
-            openingBets: <- eachBets)
+            totalRound: 2,
+            hostOpeningBet: <- openingBet)
 
-        let currency = composition.getBetCurrency()
-        let totalBets = composition.getAllBets()
-
-        // Create a new Gomoku and put it in storage
-        host.save(<-composition, to: self.CollectionStoragePath)
-
-        // Create a public capability to the Vault that only exposes
-        // the deposit function through the Receiver interface
-        host.link<&Gomoku.Composition{Gomoku.PublicCompositioning}>(
-            self.CollectionPublicPath,
-            target: self.CollectionStoragePath
-        )
+        let currencyType = composition.getBetCurrencyType()
+        let openingBet = composition.getAllBets()
 
         emit CompositionCreated(
-            host: host.address,
-            currency: currency,
-            totalBets: totalBets)
+            host: host,
+            currency: currencyType.identifier,
+            hostOpeningBet: openingBet)
+
+        return <- composition
     }
 
     pub fun matchOpponent(
-        index: UInt32, 
-        challenger: AuthAccount
-    ): Bool {
-        if let matchedHost = MatchContract.match(index: index, challenger: challenger) {
-
-            let capability = getAccount(matchedHost).getCapability(self.CollectionPublicPath)
-            if let collectionRef = capability.borrow<&Composition>() {
-                collectionRef.match(challenger: challenger)
-                collectionRef.getAllBets()
+        index: UInt32,
+        challenger: Address,
+        bet: @FungibleToken.Vault,
+        recycleBetVaultRef: &AnyResource{FungibleToken.Receiver}
+    ): @IdentityToken? {
+        if let matchedHost = MatchContract.match(index: index, challengerAddress: challenger) {
+            let publicCapability = getAccount(matchedHost).getCapability(self.CollectionPublicPath)
+            if let compositionRef = publicCapability.borrow<&Gomoku.Composition{Gomoku.PublicCompositioning}>() {
+                let identityToken <- compositionRef.match(
+                    challenger: challenger,
+                    bet: <- bet)
 
                 emit CompositionMatched(
                     host: matchedHost,
-                    challenger: challenger.address,
-                    currency: collectionRef.getBetCurrency(),
-                    totalOpeningBets: collectionRef.getAllBets())
-                return true
+                    challenger: challenger,
+                    currency: compositionRef.getBetCurrencyType().identifier,
+                    openingBet: compositionRef.getAllBets())
+
+                return <- identityToken
+            } else {
+                recycleBetVaultRef.deposit(from: <- bet)
+                return nil
+            }
+        } else {
+            recycleBetVaultRef.deposit(from: <- bet)
+            return nil
+        }
+    }
+
+    pub fun getOpeningBetType(by index: UInt32): Type? {
+        if let host = MatchContract.getHostAddress(by: index) {
+            let publicCapability = getAccount(host).getCapability(self.CollectionPublicPath)
+            if let collectionPublicRef = publicCapability.borrow<&Gomoku.Composition{Gomoku.PublicCompositioning}>() {
+                return collectionPublicRef.getBetCurrencyType()
             }
         }
-        panic("Match failed, please try again.")
+        return nil
     }
 
     pub enum StoneColor: UInt8 {
@@ -153,6 +158,35 @@ pub contract Gomoku {
         }
     }
 
+    pub resource interface IdentitySwitching {
+        access(account) fun switchIdentity()
+    }
+
+    pub resource IdentityToken: IdentitySwitching {
+        pub let id: UInt32
+        pub let address: Address
+        pub var stoneColor: StoneColor
+
+        access(account) init(
+            id: UInt32,
+            address: Address,
+            stoneColor: StoneColor
+        ) {
+            self.id = id
+            self.address = address
+            self.stoneColor = stoneColor
+        }
+
+        access(account) fun switchIdentity() {
+            switch self.stoneColor {
+            case StoneColor.black:
+                self.stoneColor = StoneColor.white
+            case StoneColor.white:
+                self.stoneColor = StoneColor.black
+            }
+        }
+    }
+
     pub enum VerifyDirection: UInt8 {
         pub case vertical
         pub case horizontal
@@ -162,14 +196,22 @@ pub contract Gomoku {
 
     pub resource interface PublicCompositioning {
         // Script
-        pub fun getBets(round: UInt8): UFix64
+        pub fun getBetCurrencyType(): Type
+        pub fun getOpeningBet(): UFix64
         pub fun getAllBets(): UFix64
-        pub fun getBetCurrency(): String
+        pub fun getTimeout(): UInt64
 
         // Transaction
-        pub fun match(challenger: AuthAccount)
+        pub fun match(
+            challenger: Address,
+            bet: @FungibleToken.Vault
+        ): @IdentityToken
 
-        pub fun switchRound()
+        pub fun makeMove(
+            identityToken: @IdentityToken,
+            stone: @Stone,
+            raisedBet: @FungibleToken.Vault
+        ): @IdentityToken
     }
 
     pub resource Composition: PublicCompositioning {
@@ -177,15 +219,24 @@ pub contract Gomoku {
         pub let StoragePath: StoragePath
         pub let PublicPath: PublicPath
 
+        pub let IdentityStoragePath: StoragePath
+        pub let IdentityPublicPath: PublicPath
+
+        pub let id: UInt32
+
         pub let boardSize: UInt8
         pub let totalRound: UInt8
         pub var currentRound: UInt8
 
-        pub var openingBets: @[FungibleToken.Vault]
+        priv var claimed: Bool
+
+        access(self) let openingBet: @FungibleToken.Vault
+        access(self) let hostRaisedBet: @FungibleToken.Vault
+        access(self) let challengerRaisedBet: @FungibleToken.Vault
 
         priv var compositionContractAddress: Address
+        priv var host: Address
         priv var challenger: Address?
-        priv var raisedBets: @[[FungibleToken.Vault]]
         priv var steps: @[[Stone]]
         priv var locationStoneMap: {String:StoneColor}
 
@@ -194,97 +245,74 @@ pub contract Gomoku {
         pub var blockHeightTimeout: UInt64
 
         init(
+            id: UInt32,
+            host: Address,
             contractAddress: Address,
             boardSize: UInt8,
-            openingBets: @[FungibleToken.Vault]
+            totalRound: UInt8,
+            hostOpeningBet: @FungibleToken.Vault
         ) {
             pre {
-                openingBets.length == 2: "Total round should be 2 and take turns to make first move (black stone) for fairness."
+                totalRound >= 2: "Total round should be 2 to take turns to make first move (black stone) for fairness."
+                totalRound % 2 == 0: "Total round should be event number to take turns to make first move (black stone) for fairness."
             }
 
             self.StoragePath = /storage/gomokuCollection
             self.PublicPath = /public/gomokuCollection
 
+            self.IdentityStoragePath = /storage/compositionIdentity
+            self.IdentityPublicPath = /public/compositionIdentity
+
+            self.id = id
+            self.host = host
             self.boardSize = boardSize
             self.compositionContractAddress = contractAddress
             self.challenger = nil
-            self.totalRound = UInt8(openingBets.length)
+            self.totalRound = totalRound
             self.currentRound = 0
-            self.openingBets <- openingBets
-            self.raisedBets <- []
+            self.claimed = false
+            self.openingBet <- hostOpeningBet
             self.steps <- []
             self.locationStoneMap = {}
-            let firstOpeningBetType = self.openingBets[0].getType()
 
-            var index: Int = 0
-            while index < self.openingBets.length {
-                let indexType = self.openingBets[index].getType()
-                assert(
-                    firstOpeningBetType == indexType,
-                    message: "Every bets should be same token "
-                        .concat(firstOpeningBetType.identifier)
-                        .concat(" but found ")
-                        .concat(indexType.identifier)
-                        .concat(" at index ")
-                        .concat(index.toString())
-                        .concat(" instead."))
-                self.raisedBets.append(<- [])
-                self.steps.append(<- [])
-                index = index + 1
+            let openingBetType = self.openingBet.getType()
+            if openingBetType == Type<@FlowToken.Vault>() {
+                // flow token
+                self.hostRaisedBet <- FlowToken.createEmptyVault()
+                self.challengerRaisedBet <- FlowToken.createEmptyVault()
+            } else if openingBetType == Type<@BloctoToken.Vault>() {
+                // blocto token
+                self.hostRaisedBet <- BloctoToken.createEmptyVault()
+                self.challengerRaisedBet <- BloctoToken.createEmptyVault()
+            } else if openingBetType == Type<@TeleportedTetherToken.Vault>() {
+                // TeleportedTetherToken token
+                self.hostRaisedBet <- TeleportedTetherToken.createEmptyVault()
+                self.challengerRaisedBet <- TeleportedTetherToken.createEmptyVault()
+            } else {
+                self.hostRaisedBet <- FlowToken.createEmptyVault()
+                self.challengerRaisedBet <- FlowToken.createEmptyVault()
+                panic("Only support Flow Token, Blocto Token, tUSDT right now.")
             }
 
             self.latestBlockHeight = getCurrentBlock().height
             self.blockHeightTimeout = UInt64(60 * 60 * 24 * 7)
-
-            let isValidVault = self.checkVaultValid(firstOpeningBetType)
-            assert(isValidVault, message: "Only support Flow Token, Blocto Token, tUSDT right now.")
         }
 
         // Script
-        pub fun getBets(round: UInt8): UFix64 {
-            pre {
-                round < self.totalRound - 1: "Input round (start from 0) should be less than or equal to total rounds."
-            }
-            var totalRaisedBets = UFix64(0)
-            var index = 0
-            while index < self.raisedBets[round].length {
-                let raisedBet = &self.raisedBets[round][index] as &FungibleToken.Vault
-                totalRaisedBets = totalRaisedBets + raisedBet.balance
-                index = index + 1
-            }
-            return self.openingBets[round].balance + totalRaisedBets
+        pub fun getBetCurrencyType(): Type {
+            return self.openingBet.getType()
+        }
+
+        pub fun getOpeningBet(): UFix64 {
+            let openingBetRef = &self.openingBet as? &FungibleToken.Vault
+            return openingBetRef.balance
         }
 
         pub fun getAllBets(): UFix64 {
-            var sum = UFix64(0)
-            var index = 0
-            while index < self.openingBets.length {
-                let openingBet = &self.openingBets[index] as &FungibleToken.Vault
-                sum = sum + openingBet.balance
-                index = index + 1
-                var innerIndex = 0
-                while innerIndex < self.raisedBets[index].length {
-                    let raisedBet = &self.raisedBets[index][innerIndex] as &FungibleToken.Vault
-                    sum = sum + raisedBet.balance
-                    innerIndex = innerIndex + 1
-                }
-            }
-            return sum
-        }
-
-        pub fun getBetCurrency(): String {
-            pre {
-                self.openingBets.length > 0: "Opening bet not found."
-            }
-            let openingBetType = self.openingBets[0].getType()
-            if openingBetType == Type<@FlowToken.Vault>() {
-                return "Flow Token"
-            } else if openingBetType == Type<@BloctoToken.Vault>() {
-                return "Blocto Token"
-            } else if openingBetType == Type<@TeleportedTetherToken.Vault>() {
-                return "tUSDT Token"
-            }
-            panic("Currency can't be identify.")
+            let openingBetRef = &self.openingBet as? &FungibleToken.Vault
+            let hostRaisedBetRef = &self.hostRaisedBet as? &FungibleToken.Vault
+            let challengerRaisedBetRef = &self.challengerRaisedBet as? &FungibleToken.Vault
+            return openingBetRef.balance + hostRaisedBetRef.balance + challengerRaisedBetRef.balance
         }
 
         pub fun getTimeout(): UInt64 {
@@ -292,18 +320,77 @@ pub contract Gomoku {
         }
 
         // Transaction
-        pub fun match(challenger: AuthAccount) {
-            self.challenger = challenger.address
+        pub fun claim(host: Address): @IdentityToken {
+            pre {
+                self.claimed == false: "Already claimed."
+            }
+            post {
+                self.claimed == true: "Not claim yet."
+            }
+            self.claimed = true
+            // generate identity token to identify who take what stone in case someone takes other's move.
+            let identity <- create IdentityToken(
+                id: self.id,
+                address: host,
+                stoneColor: StoneColor.white
+            )
+            return <- identity
+        }
+
+        pub fun match(
+            challenger: Address,
+            bet: @FungibleToken.Vault
+        ): @IdentityToken {
+            pre {
+                self.challenger == nil: "Already matched."
+            }
+            self.challenger = challenger
+            self.openingBet.deposit(from: <- bet)
+
+            // generate identity token to identify who take what stone in case someone takes other's move.
+            let identity <- create IdentityToken(
+                id: self.id,
+                address: challenger,
+                stoneColor: StoneColor.black
+            )
+            return <- identity
         }
 
         pub fun makeMove(
+            identityToken: @IdentityToken,
             stone: @Stone,
             raisedBet: @FungibleToken.Vault
-        ) {
+        ): @IdentityToken {
+            // check identity
+            pre {
+                identityToken.stoneColor == stone.color: "You are not suppose to make this move."
+                identityToken.id == self.id: "You are not authorized to make this move."
+            }
+
             // check raise bet type
-            let openingBetType = self.openingBets[self.currentRound].getType()
-            assert(raisedBet.getType() == openingBetType, message: "RaisedBets's type should be equal to opening bet's.")
-            self.raisedBets[self.currentRound].append(<- raisedBet)
+            assert(
+                raisedBet.getType() == self.openingBet.getType(),
+                message: "You can onlty raise bet with the same token of opening bet: ".concat(raisedBet.getType().identifier))
+
+            if self.currentRound % 2 == 0 {
+                // first move is challenger if index is even
+                if self.steps.length % 2 == 0 {
+                    // step for challenger
+                    self.challengerRaisedBet.deposit(from: <- raisedBet)
+                } else {
+                    // step for host
+                    self.hostRaisedBet.deposit(from: <- raisedBet)
+                }
+            } else {
+                // first move is host if index is odd
+                if self.steps.length % 2 == 0 {
+                    // step for host
+                    self.hostRaisedBet.deposit(from: <- raisedBet)
+                } else {
+                    // step for challenger
+                    self.challengerRaisedBet.deposit(from: <- raisedBet)
+                }
+            }
 
             let stoneRef = &stone as &Stone
 
@@ -323,22 +410,27 @@ pub contract Gomoku {
                     // distribute reward
                 }
             }
+
+            // reset timeout
+            self.latestBlockHeight = getCurrentBlock().height
+            return <- identityToken
         }
 
-        pub fun switchRound() {
+        // Private Method
+        priv fun switchRound() {
             pre {
                 self.totalRound > self.currentRound + 1: "Next round should not over totalRound."
             }
             self.currentRound = self.currentRound + 1
-        }
+            let hostCapability = getAccount(self.host).getCapability<&Gomoku.IdentityToken{Gomoku.IdentitySwitching}>(self.IdentityPublicPath)
+            let hostIdentitySwitchingRef = hostCapability.borrow() ?? panic("Could not borrow a reference to the host capability.")
+            hostIdentitySwitchingRef.switchIdentity()
 
-        // Private Method
-        priv fun checkVaultValid(_ type: Type): Bool {
-            return [
-                Type<@FlowToken.Vault>(),
-                Type<@BloctoToken.Vault>(),
-                Type<@TeleportedTetherToken.Vault>()
-            ].contains(type)
+            assert(self.challenger != nil, message: "Challenger not found.")
+
+            let challengerCapability = getAccount(self.challenger!).getCapability<&Gomoku.IdentityToken{Gomoku.IdentitySwitching}>(self.IdentityPublicPath)
+            let challengerIdentitySwitchingRef = challengerCapability.borrow() ?? panic("Could not borrow a reference to the challenger capability.")
+            challengerIdentitySwitchingRef.switchIdentity()
         }
 
         priv fun verifyAndStoreStone(stone: @Stone) {
@@ -409,7 +501,6 @@ pub contract Gomoku {
             center: StoneLocation,
             direction: VerifyDirection
         ): Bool {
-            // let checkLocations: [StoneLocation] = []
             var countInRow: UInt8 = 1
             var shift: Int8 = 1
             var isFinished: Bool = false
@@ -555,49 +646,44 @@ pub contract Gomoku {
         }
 
         priv fun recycleBets() {
-            var roundIndex = 0
-            while roundIndex < self.openingBets.length {
-                var index = 0
-                let openingBetType = self.openingBets[roundIndex].getType()
-                let compositionContractAccount = getAccount(self.compositionContractAddress)
-                if openingBetType == Type<@FlowToken.Vault>() {
-                    let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(/public/flowTokenReceiver)
-                    let flowVaultReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                    flowVaultReference.deposit(from: <- self.openingBets.remove(at: roundIndex))
-                    while index < self.raisedBets[roundIndex].length {
-                        if self.raisedBets[roundIndex][index].getType() == openingBetType {
-                            flowVaultReference.deposit(from: <- self.raisedBets[roundIndex].remove(at: index))
-                        }
-                        index = index + 1
-                    }
-                } else if openingBetType == Type<@BloctoToken.Vault>() {
-                    let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(BloctoToken.TokenPublicReceiverPath)
-                    let bltVaultReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                    bltVaultReference.deposit(from: <- self.openingBets.remove(at: roundIndex))
-                    while index < self.raisedBets[roundIndex].length {
-                        if self.raisedBets[roundIndex][index].getType() == openingBetType {
-                            bltVaultReference.deposit(from: <- self.raisedBets[roundIndex].remove(at: index))
-                        }
-                        index = index + 1
-                    }
-                } else if openingBetType == Type<@TeleportedTetherToken.Vault>() {
-                    let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(TeleportedTetherToken.TokenPublicReceiverPath)
-                    let tUSDTVaultReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                    tUSDTVaultReference.deposit(from: <- self.openingBets.remove(at: roundIndex))
-                    while index < self.raisedBets[roundIndex].length {
-                        if self.raisedBets[roundIndex][index].getType() == openingBetType {
-                            tUSDTVaultReference.deposit(from: <- self.raisedBets[roundIndex].remove(at: index))
-                        }
-                        index = index + 1
-                    }
+            let openingBetType = self.openingBet.getType()
+            let compositionContractAccount = getAccount(self.compositionContractAddress)
+            if openingBetType == Type<@FlowToken.Vault>() {
+                let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+                let flowReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
+                flowReceiverReference.deposit(from: <- self.openingBet)
+                if self.hostRaisedBet.getType() == openingBetType {
+                    flowReceiverReference.deposit(from: <- self.hostRaisedBet)
                 }
-                roundIndex = roundIndex + 1
+                if self.challengerRaisedBet.getType() == openingBetType {
+                    flowReceiverReference.deposit(from: <- self.challengerRaisedBet)
+                }
+            } else if openingBetType == Type<@BloctoToken.Vault>() {
+                let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(BloctoToken.TokenPublicReceiverPath)
+                let bltReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
+                bltReceiverReference.deposit(from: <- self.openingBet)
+                if self.hostRaisedBet.getType() == openingBetType {
+                    bltReceiverReference.deposit(from: <- self.hostRaisedBet)
+                }
+                if self.challengerRaisedBet.getType() == openingBetType {
+                    bltReceiverReference.deposit(from: <- self.challengerRaisedBet)
+                }
+            } else if openingBetType == Type<@TeleportedTetherToken.Vault>() {
+                let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(TeleportedTetherToken.TokenPublicReceiverPath)
+                let tUSDTReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
+                tUSDTReceiverReference.deposit(from: <- self.openingBet)
+                if self.hostRaisedBet.getType() == openingBetType {
+                    tUSDTReceiverReference.deposit(from: <- self.hostRaisedBet)
+                }
+                if self.challengerRaisedBet.getType() == openingBetType {
+                    tUSDTReceiverReference.deposit(from: <- self.challengerRaisedBet)
+                }
             }
         }
 
         destroy() {
             self.recycleBets()
-            destroy self.openingBets
+            destroy self.openingBet
             destroy self.raisedBets
             destroy self.steps
         }
