@@ -4,6 +4,7 @@ import * as fcl from "@onflow/fcl";
   
   fcl.config()
   .put("env", "testnet")
+  // .put("flow.network", "local")
   .put("accessNode.api", "https://access-testnet.onflow.org")
 
   const latestBlock = await fcl.latestBlock(true)
@@ -26,19 +27,18 @@ import * as fcl from "@onflow/fcl";
   const transaction = await fcl.tx('b568cddcd4701bbccc69f8ce6f3b9d7faacbd77d3c3e7b25e7225d9ce1565f22').onceSealed()
   console.log(`💥 transaction: ${JSON.stringify(transaction, null, '\t')}`)
 
-  // const result = await fcl.query({
-  //   cadence: `
-  //     pub fun main(a: Int, b: Int, addr: Address): Int {
-  //       log(addr)
-  //       return a + b
-  //     }
-  //   `,
-  //   args: (arg, t) => [
-  //     arg(7, t.Int), // a: Int
-  //     arg(6, t.Int), // b: Int
-  //     arg("0xba1132bc08f82fe2", t.Address), // addr: Address
-  //   ],
-  // });
+  const result = await fcl.mutate({
+    cadence: `
+    transaction {
+      execute {
+        log("Hello from execute")
+      }
+    }
+    `,
+    proposer: fcl.currentUser,
+    payer: fcl.currentUser,
+    limit: 50
+  });
 
   // console.log(result); // 13
 })()

@@ -8,7 +8,7 @@ import {
   shallPass,
   shallRevert
 } from "@onflow/flow-js-testing";
-import { deployMatcher, expectContractDeployed } from "./utils";
+import { deployMatcher } from "./utils";
 
 describe("Matcher control", () => {
   beforeEach(async () => {

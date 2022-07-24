@@ -6,6 +6,7 @@ pub contract MatchContract {
 
     pub let waitingIndices: [UInt32]
     pub let matchedIndices: [UInt32]
+    pub let finalizeIndices: [UInt32]
 
     priv var registerActive: Bool
     priv var matchActive: Bool
@@ -38,6 +39,7 @@ pub contract MatchContract {
         self.indexAddressMap = {}
         self.waitingIndices = []
         self.matchedIndices = []
+        self.finalizeIndices = []
         self.AdminStoragePath = /storage/matchAdmin
         let admin <- create Admin()
         self.account.save(<- admin, to: self.AdminStoragePath)
@@ -91,6 +93,12 @@ pub contract MatchContract {
         let key = address.toString().toLower()
         let addressGroup = self.addressGroupMap[key] ?? {}
         return addressGroup[MatchStatus.matched] ?? []
+    }
+
+    pub fun getFinished(by address: Address): [UInt32] {
+        let key = address.toString().toLower()
+        let addressGroup = self.addressGroupMap[key] ?? {}
+        return addressGroup[MatchStatus.finished] ?? []
     }
 
     pub fun getHostAddress(by index: UInt32): Address? {
@@ -188,9 +196,54 @@ pub contract MatchContract {
         return nil
     }
 
+    access(account) fun finish(index: UInt32) {
+        pre {
+            self.finalizeIndices.contains(index) == false: "Index already finished."
+            self.matchedIndices.firstIndex(of: index) != nil: "Index not exist in matchedIndices."
+        }
+        post {
+            self.finalizeIndices.contains(index): "Finish failed."
+        }
+
+        let indexOfMatched = self.matchedIndices.firstIndex(of: index)!
+        let finishedIndex = self.matchedIndices.remove(at: indexOfMatched)
+        assert(finishedIndex == index: "Finish failed.")
+        self.finalizeIndices.append(index)
+
+        let roleAddressMap = self.indexAddressMap[index] ?? {}
+        assert(roleAddressMap[MatchRole.host] != nil, message: "Host not found for this index.")
+        assert(roleAddressMap[MatchRole.challenger] != nil, message: "Challenger already exist.")
+        let hostAddress = roleAddressMap[MatchRole.host]!
+        let challengerAddress = roleAddressMap[MatchRole.challenger]!
+
+        let hostKey = hostAddress.toString().toLower()
+        let challengerKey = challengerAddress.toString().toLower()
+        self.moveMatchedToFinished(for: index, key: hostKey)
+        self.moveMatchedToFinished(for: index, key: challengerKey)
+    }
+
+    priv fun moveMatchedToFinished(for index: UInt32, key: String) {
+        assert(self.addressGroupMap.keys.contains(key), message: "Address key not found for this index.")
+
+        let addressGroup = self.addressGroupMap[key] ?? {}
+        let matchedGroup: [UInt32] = addressGroup[MatchStatus.matched] ?? []
+        assert(matchedGroup.contains(index), message: "Index not found in matchedGroup.")
+        let indexOfMatchedGroup = matchedGroup.firstIndex(of: index)!
+        let removedIndex = matchedGroup.remove(at: indexOfMatchedGroup)
+        assert(removedIndex == index: "Finish failed.")
+        addressGroup[MatchStatus.matched] = matchedGroup
+
+        let finishedGroup: [UInt32] = addressGroup[MatchStatus.finished] ?? []
+        finishedGroup.append(index)
+        addressGroup[MatchStatus.finished] = finishedGroup
+
+        self.addressGroupMap[key] = addressGroup
+    }
+
     pub enum MatchStatus: UInt8 {
         pub case waiting
         pub case matched
+        pub case finished
     }
 
     pub enum MatchRole: UInt8 {

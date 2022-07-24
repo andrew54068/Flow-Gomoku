@@ -10,7 +10,7 @@ import {
 } from "@onflow/flow-js-testing";
 import { deployMatcher } from "./utils";
 
-describe("Matcher", () => {
+describe("Gomoku", () => {
   beforeEach(async () => {
     const basePath = path.resolve(__dirname, "../cadence");
 
@@ -28,8 +28,6 @@ describe("Matcher", () => {
   })
 
   test("match successfully", async () => {
-
-    emulator.setLogging(true)
 
     const alice = await getAccountAddress("Alice")
     const args = []
@@ -114,57 +112,6 @@ describe("Matcher", () => {
     const [hostResult2, hostScriptError2] = await executeScript('Matcher-get-host-by-index', [0])
     expect(hostScriptError2).toBeNull()
     expect(hostResult2).toEqual(alice)
-
-    emulator.setLogging(false)
-
-  })
-
-  test("match again with same index", async () => {
-
-    const alice = await getAccountAddress("Alice")
-    const args = []
-    const signers = [alice]
-
-    const [txResult, error] = await shallPass(
-      sendTransaction('TestMatcher-admin-active-register', signers, args)
-    )
-    console.log(txResult, error)
-
-    const [activeMatchTxResult, activeMatchError] = await shallPass(
-      sendTransaction('TestMatcher-admin-active-match', [alice], [])
-    )
-    console.log(activeMatchTxResult, activeMatchError)
-    expect(activeMatchError).toBeNull()
-
-    const [scriptResult, scriptError] = await executeScript('Matcher-get-random-waiting-index', [])
-    expect(scriptError).toBeNull()
-    expect(scriptResult).toBe(0)
-
-    const bob = await getAccountAddress("Bob")
-    const args2 = [scriptResult]
-    const signers2 = [bob]
-
-    const [txResult2, error2] = await shallPass(
-      sendTransaction('TestMatcher-match', signers2, args2)
-    )
-    console.log(txResult2, error2)
-
-    const [hostResult, hostScriptError] = await executeScript('Matcher-get-host-by-index', [0])
-    expect(hostScriptError).toBeNull()
-    expect(hostResult).toEqual(alice)
-
-    const [challengerResult, challengerScriptError] = await executeScript('Matcher-get-challenger-by-index', [0])
-    expect(challengerScriptError).toBeNull()
-    expect(challengerResult).toEqual(bob)
-
-    const andrew = await getAccountAddress("Bob")
-    const andrewArgs = [scriptResult]
-    const andrewSigners = [andrew]
-
-    const [txResult3, error3] = await shallRevert(
-      sendTransaction('TestMatcher-match', andrewSigners, andrewArgs)
-    )
-    console.log(txResult3, error3)
 
   })
 })
