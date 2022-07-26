@@ -2,8 +2,8 @@ import MatchContract from "./MatchContract.cdc"
 import FungibleToken from "./FungibleToken.cdc"
 import NonFungibleToken from "./NonFungibleToken.cdc"
 import BloctoToken from "./BloctoToken.cdc"
-import FlowToken from 0x0ae53cb6e3f42a79
-// import FlowToken from "./FlowToken.cdc"
+// import FlowToken from 0x0ae53cb6e3f42a79
+import FlowToken from "./FlowToken.cdc"
 import TeleportedTetherToken from "./TeleportedTetherToken.cdc"
 
 pub contract Gomoku {
@@ -46,7 +46,7 @@ pub contract Gomoku {
         }
     }
 
-    pub fun getCompositionRef(by index: UInt32): &Composition? {
+    pub fun getCompositionRef(by index: UInt32): &AnyResource{Gomoku.PublicCompositioning}? {
         if let host = MatchContract.getHostAddress(by: index) {
             let publicCapability = getAccount(host).getCapability(self.CollectionPublicPath)
             return publicCapability.borrow<&Gomoku.Composition{Gomoku.PublicCompositioning}>()
@@ -59,7 +59,7 @@ pub contract Gomoku {
         if let host = MatchContract.getHostAddress(by: index) {
             let publicCapability = getAccount(host).getCapability(self.CollectionPublicPath)
             let conpisitionRef = publicCapability.borrow<&Gomoku.Composition{Gomoku.PublicCompositioning}>()
-            return conpisitionRef.getParticipants()
+            return conpisitionRef?.getParticipants() ?? []
         } else {
             return []
         }
@@ -157,6 +157,19 @@ pub contract Gomoku {
 
     }
 
+    pub struct StoneData {
+        pub let color: StoneColor
+        pub let location: StoneLocation
+
+        init(
+            color: StoneColor,
+            location: StoneLocation
+        ) {
+            self.color = color
+            self.location = location
+        }
+    }
+
     pub resource Stone {
         pub let color: StoneColor
         pub let location: StoneLocation
@@ -173,8 +186,11 @@ pub contract Gomoku {
             return self.location.key()
         }
 
-        pub fun convertToData(): [Int8] {
-            return [self.location.x, self.location.y, self.color.rawValue]
+        pub fun convertToData(): StoneData {
+            return StoneData(
+                color: self.color,
+                location: self.location
+            )
         }
     }
 
@@ -185,15 +201,18 @@ pub contract Gomoku {
     pub resource IdentityToken: IdentitySwitching {
         pub let id: UInt32
         pub let address: Address
+        pub let role: Role
         pub var stoneColor: StoneColor
 
         access(account) init(
             id: UInt32,
             address: Address,
+            role: Role,
             stoneColor: StoneColor
         ) {
             self.id = id
             self.address = address
+            self.role = role
             self.stoneColor = stoneColor
         }
 
@@ -232,8 +251,14 @@ pub contract Gomoku {
         pub fun makeMove(
             identityToken: @IdentityToken,
             stone: @Stone,
-            raisedBet: @FungibleToken.Vault
+            raisedBet: @FungibleToken.Vault,
+            hasRoundWinnerCallback: ((Bool): Void)
         ): @IdentityToken
+    }
+
+    pub enum Role: UInt8 {
+        pub case host
+        pub case challenger
     }
 
     pub resource Composition: PublicCompositioning {
@@ -250,7 +275,8 @@ pub contract Gomoku {
         pub let totalRound: UInt8
         pub var currentRound: UInt8
 
-        priv var claimed: Bool
+        priv var claimedHost: Bool
+        priv var winner: Role?
 
         access(self) let openingBet: @FungibleToken.Vault
         access(self) let hostRaisedBet: @FungibleToken.Vault
@@ -259,7 +285,7 @@ pub contract Gomoku {
         priv var compositionContractAddress: Address
         priv var host: Address
         priv var challenger: Address?
-        priv var roundWiners: [Address]
+        priv var roundWiners: [Role]
         priv var steps: @[[Stone]]
         priv var locationStoneMap: {String:StoneColor}
 
@@ -293,7 +319,8 @@ pub contract Gomoku {
             self.challenger = nil
             self.totalRound = totalRound
             self.currentRound = 0
-            self.claimed = false
+            self.claimedHost = false
+            self.winner = nil
             self.openingBet <- hostOpeningBet
             self.roundWiners = []
             self.steps <- []
@@ -343,15 +370,30 @@ pub contract Gomoku {
             return self.latestBlockHeight + self.blockHeightTimeout
         }
 
-        pub fun getStoneData(for round: UInt8): [[UInt8]] {
+        pub fun getStoneData(for round: UInt8): [StoneData] {
             pre {
                 self.steps.length > Int(round): "Round ".concat(round.toString()).concat(" not exist.")
             }
-            let roundSteps = &self.steps[self.currentRound] as &[Stone]
-            var stoneData: [[UInt8]] = []
-            for step in roundSteps {
-                stoneData.append(step.convertToData())
+            var placeholderArray: @[Stone] <- []
+            self.steps[self.currentRound] <-> placeholderArray
+            var placeholderStone <- create Stone(
+                color: StoneColor.black,
+                location: StoneLocation(x: 0, y: 0)
+            )
+            var stoneData: [StoneData] = []
+            var index = 0
+            while index < placeholderArray.length {
+                placeholderArray[index] <-> placeholderStone
+                stoneData.append(placeholderStone.convertToData())
+                placeholderArray[index] <-> placeholderStone
+                // destroy step
+                index = index + 1
             }
+
+            self.steps[self.currentRound] <-> placeholderArray
+
+            destroy placeholderArray
+            destroy placeholderStone
             return stoneData
         }
 
@@ -366,16 +408,17 @@ pub contract Gomoku {
         // Transaction
         pub fun claim(host: Address): @IdentityToken {
             pre {
-                self.claimed == false: "Already claimed."
+                self.claimedHost == false: "Already claimed."
             }
             post {
-                self.claimed == true: "Not claim yet."
+                self.claimedHost == true: "Not claim yet."
             }
-            self.claimed = true
+            self.claimedHost = true
             // generate identity token to identify who take what stone in case someone takes other's move.
             let identity <- create IdentityToken(
                 id: self.id,
                 address: host,
+                role: Role.host,
                 stoneColor: StoneColor.white
             )
             return <- identity
@@ -395,6 +438,7 @@ pub contract Gomoku {
             let identity <- create IdentityToken(
                 id: self.id,
                 address: challenger,
+                role: Role.challenger,
                 stoneColor: StoneColor.black
             )
             return <- identity
@@ -403,13 +447,15 @@ pub contract Gomoku {
         pub fun makeMove(
             identityToken: @IdentityToken,
             stone: @Stone,
-            raisedBet: @FungibleToken.Vault
+            raisedBet: @FungibleToken.Vault,
+            hasRoundWinnerCallback: ((Bool): Void)
         ): @IdentityToken {
             // check identity
             pre {
                 identityToken.stoneColor == stone.color: "You are not suppose to make this move."
                 identityToken.id == self.id: "You are not authorized to make this move."
-                self.currentRound + 1 > self.roundWiners.length: "Game Over."
+                identityToken.owner?.address == identityToken.address: "Identity token should not be transfer to other."
+                Int(self.currentRound) + 1 > self.roundWiners.length: "Game Over."
             }
 
             // check raise bet type
@@ -419,16 +465,16 @@ pub contract Gomoku {
                     .concat(raisedBet.getType().identifier)
             )
 
-            let lastRole = self.getLastRole()
-            let currentRole: Role
+            let lastRole = self.getRole()
+            var currentRole = Role.host
             switch lastRole {
             case Role.host:
                 currentRole = Role.challenger
                 assert(self.challenger != nil, message: "Challenger not found.")
-                assert(identityToken.address == self.challenger!, message: "It's challenger's turn!")
+                assert(identityToken.address == self.challenger!, message: "It's not you turn yet!")
             case Role.challenger:
                 currentRole = Role.host
-                assert(identityToken.address == self.host, message: "It's host's turn!")
+                assert(identityToken.address == self.host, message: "It's not you turn yet!")
             }
 
             switch currentRole {
@@ -436,6 +482,8 @@ pub contract Gomoku {
                 self.hostRaisedBet.deposit(from: <- raisedBet)
             case Role.challenger:
                 self.challengerRaisedBet.deposit(from: <- raisedBet)
+            default:
+                panic("Should not be the case.")
             }
 
             let stoneRef = &stone as &Stone
@@ -447,16 +495,17 @@ pub contract Gomoku {
                 targetColor: stoneRef.color,
                 center: stoneRef.location)
             if hasRoundWinner {
-                self.roundWiners.append(identityToken.address)
+                self.roundWiners.append(identityToken.role)
                 // event
                 // end of current round
-                if self.currentRound + UInt8(1) < self.totalRound {
-                    self.switchRound()
-                } else {
-                    // end of game
-                    // distribute reward
-                    self.distributeReward(abort: false)
-                }
+                hasRoundWinnerCallback(hasRoundWinner)
+                // if self.currentRound + UInt8(1) < self.totalRound {
+                //     self.switchRound()
+                // } else {
+                //     // end of game
+                //     // distribute reward
+                //     self.distributeReward(abort: false)
+                // }
             }
 
             // reset timeout
@@ -468,16 +517,35 @@ pub contract Gomoku {
             pre {
                 identityToken.id == self.id: "You are not authorized to make this move."
             }
+
+            destroy identityToken
         }
 
         pub fun finalize() {
             // distribute reward
-            self.distributeReward(abort: false)
+
+        }
+
+        // Restricted to prevent from potential attack.
+        access(account) fun finalizeByTimeout() {
+            pre {
+                getCurrentBlock().height > self.getTimeout(): "Let's give opponent more time to think......"
+            }
+
+            let lastRole = self.getRole()
+            self.roundWiners.append(lastRole)
+            if self.currentRound + UInt8(1) < self.totalRound {
+                self.switchRound()
+            } else {
+                // end of game
+                // distribute reward
+                self.finalize()
+            }
         }
 
         // Private Method
         // Challenger go first in first round
-        priv fun getLastRole(): Role {
+        priv fun getRole(): Role {
             if self.currentRound % 2 == 0 {
                 // first move is challenger if index is even
                 if self.steps.length % 2 == 0 {
@@ -501,7 +569,12 @@ pub contract Gomoku {
 
         priv fun switchRound() {
             pre {
+                self.roundWiners[self.currentRound] != nil: "Current round winner not decided."
                 self.totalRound > self.currentRound + 1: "Next round should not over totalRound."
+            }
+            post {
+                self.currentRound == before(self.currentRound) + 1: "fatal error."
+                self.roundWiners[self.currentRound] == nil: "Should not have winner right after switching rounds."
             }
             self.currentRound = self.currentRound + 1
             let hostCapability = getAccount(self.host).getCapability<&Gomoku.IdentityToken{Gomoku.IdentitySwitching}>(self.IdentityPublicPath)
@@ -727,42 +800,50 @@ pub contract Gomoku {
             return countInRow >= UInt8(5)
         }
 
-        priv fun distributeReward(
-            abort: Bool
-        ) {
-            let roundSteps = &self.steps[self.currentRound] as &[Stone]
-            let lastStep = roundSteps[roundSteps.length - 1]
-            if abort {
-                assert(
-                    self.getCurrentBlock().height > self.getTimeout(),
-                    message: "Let's give opponent more time to think......"
-                )
-                let lastRole = self.getLastRole()
-                switch lastRole {
-                case Role.host:
-                    // host wins
-                    
-                case Role.challenger:
-                    // challenger wins
-                    if let challenger = self.challenger {
+        priv fun distributeReward() {
+            pre {
+                self.roundWiners.length == Int(self.totalRound): "Game not over yet!"
+            }
 
-                    } else {
-                        panic("Challenger not found.")
-                    }
+            let firstRoundWinner = self.roundWiners[0]
+            let secondRoundWinner = self.roundWiners[1]
+            if firstRoundWinner == secondRoundWinner {
+                let winner = firstRoundWinner
+                // has winner
+                switch winner {
+                case Role.host:
+                    // developer get 5% for developing this game
+                    // winner get 95%
+
+                case Role.challenger:
+                    // developer get 5% for developing this game
+                    // host get extra 2% for being host.
+                    // winner get 93%.
+
+                default:
+                    panic("Should not be the case.")
                 }
             } else {
-                let currentRole = self.getLastRole()
-                switch currentRole {
-                case Role.host:
-                    // host wins
-                    
-                case Role.challenger:
-                    // challenger wins
-                    if let challenger = self.challenger {
+                // draw
+                // developer get 2% for developing this game
+                // each player get 49%.
+            }
 
-                    } else {
-                        panic("Challenger not found.")
-                    }
+
+            let roundSteps = &self.steps[self.currentRound] as &[Stone]
+            
+            let lastStep = &roundSteps[roundSteps.length - 1] as &Stone
+            let lastRole = self.getRole()
+            switch lastRole {
+            case Role.host:
+                // host wins
+                
+            case Role.challenger:
+                // challenger wins
+                if let challenger = self.challenger {
+
+                } else {
+                    panic("Challenger not found.")
                 }
             }
         }
@@ -772,6 +853,7 @@ pub contract Gomoku {
             vault: @FungibleToken.Vault
         ) {
             let betType = vault.getType()
+            let compositionContractAccount = getAccount(self.compositionContractAddress)
             if betType == Type<@FlowToken.Vault>() {
                 let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(/public/flowTokenReceiver)
                 let flowReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
@@ -795,32 +877,41 @@ pub contract Gomoku {
             if openingBetType == Type<@FlowToken.Vault>() {
                 let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(/public/flowTokenReceiver)
                 let flowReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                flowReceiverReference.deposit(from: <- self.openingBet)
+                let withdrawBet <- self.openingBet.withdraw(amount: self.openingBet.balance)
+                flowReceiverReference.deposit(from: <- withdrawBet)
                 if self.hostRaisedBet.getType() == openingBetType {
-                    flowReceiverReference.deposit(from: <- self.hostRaisedBet)
+                    let withdrawHostRaisedBet <- self.hostRaisedBet.withdraw(amount: self.hostRaisedBet.balance)
+                    flowReceiverReference.deposit(from: <- withdrawHostRaisedBet)
                 }
                 if self.challengerRaisedBet.getType() == openingBetType {
-                    flowReceiverReference.deposit(from: <- self.challengerRaisedBet)
+                    let withdrawChallengerRaisedBet <- self.challengerRaisedBet.withdraw(amount: self.challengerRaisedBet.balance)
+                    flowReceiverReference.deposit(from: <- withdrawChallengerRaisedBet)
                 }
             } else if openingBetType == Type<@BloctoToken.Vault>() {
                 let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(BloctoToken.TokenPublicReceiverPath)
                 let bltReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                bltReceiverReference.deposit(from: <- self.openingBet)
+                let withdrawBet <- self.openingBet.withdraw(amount: self.openingBet.balance)
+                bltReceiverReference.deposit(from: <- withdrawBet)
                 if self.hostRaisedBet.getType() == openingBetType {
-                    bltReceiverReference.deposit(from: <- self.hostRaisedBet)
+                    let withdrawHostRaisedBet <- self.hostRaisedBet.withdraw(amount: self.hostRaisedBet.balance)
+                    bltReceiverReference.deposit(from: <- withdrawHostRaisedBet)
                 }
                 if self.challengerRaisedBet.getType() == openingBetType {
-                    bltReceiverReference.deposit(from: <- self.challengerRaisedBet)
+                    let withdrawChallengerRaisedBet <- self.challengerRaisedBet.withdraw(amount: self.challengerRaisedBet.balance)
+                    bltReceiverReference.deposit(from: <- withdrawChallengerRaisedBet)
                 }
             } else if openingBetType == Type<@TeleportedTetherToken.Vault>() {
                 let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(TeleportedTetherToken.TokenPublicReceiverPath)
                 let tUSDTReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                tUSDTReceiverReference.deposit(from: <- self.openingBet)
+                let withdrawBet <- self.openingBet.withdraw(amount: self.openingBet.balance)
+                tUSDTReceiverReference.deposit(from: <- withdrawBet)
                 if self.hostRaisedBet.getType() == openingBetType {
-                    tUSDTReceiverReference.deposit(from: <- self.hostRaisedBet)
+                    let withdrawHostRaisedBet <- self.hostRaisedBet.withdraw(amount: self.hostRaisedBet.balance)
+                    tUSDTReceiverReference.deposit(from: <- withdrawHostRaisedBet)
                 }
                 if self.challengerRaisedBet.getType() == openingBetType {
-                    tUSDTReceiverReference.deposit(from: <- self.challengerRaisedBet)
+                    let withdrawChallengerRaisedBet <- self.challengerRaisedBet.withdraw(amount: self.challengerRaisedBet.balance)
+                    tUSDTReceiverReference.deposit(from: <- withdrawChallengerRaisedBet)
                 }
             }
         }
@@ -828,14 +919,11 @@ pub contract Gomoku {
         destroy() {
             self.recycleBets()
             destroy self.openingBet
-            destroy self.raisedBets
+            destroy self.hostRaisedBet
+            destroy self.challengerRaisedBet
             destroy self.steps
         }
 
-        priv enum Role: UInt8 {
-            priv case host
-            priv case challenger
-        }
     }
 
 }

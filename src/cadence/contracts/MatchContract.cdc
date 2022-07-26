@@ -207,7 +207,7 @@ pub contract MatchContract {
 
         let indexOfMatched = self.matchedIndices.firstIndex(of: index)!
         let finishedIndex = self.matchedIndices.remove(at: indexOfMatched)
-        assert(finishedIndex == index: "Finish failed.")
+        assert(finishedIndex == index, message: "Finish failed.")
         self.finalizeIndices.append(index)
 
         let roleAddressMap = self.indexAddressMap[index] ?? {}
@@ -230,7 +230,7 @@ pub contract MatchContract {
         assert(matchedGroup.contains(index), message: "Index not found in matchedGroup.")
         let indexOfMatchedGroup = matchedGroup.firstIndex(of: index)!
         let removedIndex = matchedGroup.remove(at: indexOfMatchedGroup)
-        assert(removedIndex == index: "Finish failed.")
+        assert(removedIndex == index, message: "Finish failed.")
         addressGroup[MatchStatus.matched] = matchedGroup
 
         let finishedGroup: [UInt32] = addressGroup[MatchStatus.finished] ?? []
