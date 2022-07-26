@@ -1,10 +1,8 @@
 import MatchContract from "./MatchContract.cdc"
 import FungibleToken from "./FungibleToken.cdc"
 import NonFungibleToken from "./NonFungibleToken.cdc"
-import BloctoToken from "./BloctoToken.cdc"
 // import FlowToken from 0x0ae53cb6e3f42a79
 import FlowToken from "./FlowToken.cdc"
-import TeleportedTetherToken from "./TeleportedTetherToken.cdc"
 
 pub contract Gomoku {
 
@@ -33,16 +31,6 @@ pub contract Gomoku {
         if self.account.borrow<&FlowToken.Vault>(from: /storage/flowTokenVault) == nil {
             let flowVault <- FlowToken.createEmptyVault()
             self.account.save(<- flowVault, to: /storage/flowTokenVault)
-        }
-
-        if self.account.borrow<&BloctoToken.Vault>(from: BloctoToken.TokenStoragePath) == nil {
-            let bltVault <- BloctoToken.createEmptyVault()
-            self.account.save(<- bltVault, to: BloctoToken.TokenStoragePath)
-        }
-
-        if self.account.borrow<&TeleportedTetherToken.Vault>(from: TeleportedTetherToken.TokenStoragePath) == nil {
-            let tUSDTVault <- TeleportedTetherToken.createEmptyVault()
-            self.account.save(<- tUSDTVault, to: TeleportedTetherToken.TokenStoragePath)
         }
     }
 
@@ -94,8 +82,8 @@ pub contract Gomoku {
     pub fun matchOpponent(
         index: UInt32,
         challenger: Address,
-        bet: @FungibleToken.Vault,
-        recycleBetVaultRef: &AnyResource{FungibleToken.Receiver}
+        bet: @FlowToken.Vault,
+        recycleBetVaultRef: &FlowToken.Vault{FungibleToken.Receiver}
     ): @IdentityToken? {
         if let matchedHost = MatchContract.match(index: index, challengerAddress: challenger) {
             let publicCapability = getAccount(matchedHost).getCapability(self.CollectionPublicPath)
@@ -331,18 +319,8 @@ pub contract Gomoku {
                 // flow token
                 self.hostRaisedBet <- FlowToken.createEmptyVault()
                 self.challengerRaisedBet <- FlowToken.createEmptyVault()
-            } else if openingBetType == Type<@BloctoToken.Vault>() {
-                // blocto token
-                self.hostRaisedBet <- BloctoToken.createEmptyVault()
-                self.challengerRaisedBet <- BloctoToken.createEmptyVault()
-            } else if openingBetType == Type<@TeleportedTetherToken.Vault>() {
-                // TeleportedTetherToken token
-                self.hostRaisedBet <- TeleportedTetherToken.createEmptyVault()
-                self.challengerRaisedBet <- TeleportedTetherToken.createEmptyVault()
             } else {
-                self.hostRaisedBet <- FlowToken.createEmptyVault()
-                self.challengerRaisedBet <- FlowToken.createEmptyVault()
-                panic("Only support Flow Token, Blocto Token, tUSDT right now.")
+                panic("We only support Flow Token for now.")
             }
 
             self.latestBlockHeight = getCurrentBlock().height
@@ -850,70 +828,27 @@ pub contract Gomoku {
 
         priv fun withdrawBet(
             to: Address,
-            vault: @FungibleToken.Vault
+            vault: @FlowToken.Vault
         ) {
             let betType = vault.getType()
             let compositionContractAccount = getAccount(self.compositionContractAddress)
-            if betType == Type<@FlowToken.Vault>() {
-                let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(/public/flowTokenReceiver)
-                let flowReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                flowReceiverReference.deposit(from: <- vault)
-            } else if betType == Type<@BloctoToken.Vault>() {
-                let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(BloctoToken.TokenPublicReceiverPath)
-                let bltReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                bltReceiverReference.deposit(from: <- vault)
-            } else if betType == Type<@TeleportedTetherToken.Vault>() {
-                let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(TeleportedTetherToken.TokenPublicReceiverPath)
-                let tUSDTReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                tUSDTReceiverReference.deposit(from: <- vault)
-            } else {
-                panic("")
-            }
+            let capability = compositionContractAccount.getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+            let flowReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the Flow token receiver capability")
+            flowReceiverReference.deposit(from: <- vault)
         }
 
         priv fun recycleBets() {
-            let openingBetType = self.openingBet.getType()
             let compositionContractAccount = getAccount(self.compositionContractAddress)
-            if openingBetType == Type<@FlowToken.Vault>() {
-                let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(/public/flowTokenReceiver)
-                let flowReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                let withdrawBet <- self.openingBet.withdraw(amount: self.openingBet.balance)
-                flowReceiverReference.deposit(from: <- withdrawBet)
-                if self.hostRaisedBet.getType() == openingBetType {
-                    let withdrawHostRaisedBet <- self.hostRaisedBet.withdraw(amount: self.hostRaisedBet.balance)
-                    flowReceiverReference.deposit(from: <- withdrawHostRaisedBet)
-                }
-                if self.challengerRaisedBet.getType() == openingBetType {
-                    let withdrawChallengerRaisedBet <- self.challengerRaisedBet.withdraw(amount: self.challengerRaisedBet.balance)
-                    flowReceiverReference.deposit(from: <- withdrawChallengerRaisedBet)
-                }
-            } else if openingBetType == Type<@BloctoToken.Vault>() {
-                let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(BloctoToken.TokenPublicReceiverPath)
-                let bltReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                let withdrawBet <- self.openingBet.withdraw(amount: self.openingBet.balance)
-                bltReceiverReference.deposit(from: <- withdrawBet)
-                if self.hostRaisedBet.getType() == openingBetType {
-                    let withdrawHostRaisedBet <- self.hostRaisedBet.withdraw(amount: self.hostRaisedBet.balance)
-                    bltReceiverReference.deposit(from: <- withdrawHostRaisedBet)
-                }
-                if self.challengerRaisedBet.getType() == openingBetType {
-                    let withdrawChallengerRaisedBet <- self.challengerRaisedBet.withdraw(amount: self.challengerRaisedBet.balance)
-                    bltReceiverReference.deposit(from: <- withdrawChallengerRaisedBet)
-                }
-            } else if openingBetType == Type<@TeleportedTetherToken.Vault>() {
-                let capability = compositionContractAccount.getCapability<&AnyResource{FungibleToken.Receiver}>(TeleportedTetherToken.TokenPublicReceiverPath)
-                let tUSDTReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the hello capability")
-                let withdrawBet <- self.openingBet.withdraw(amount: self.openingBet.balance)
-                tUSDTReceiverReference.deposit(from: <- withdrawBet)
-                if self.hostRaisedBet.getType() == openingBetType {
-                    let withdrawHostRaisedBet <- self.hostRaisedBet.withdraw(amount: self.hostRaisedBet.balance)
-                    tUSDTReceiverReference.deposit(from: <- withdrawHostRaisedBet)
-                }
-                if self.challengerRaisedBet.getType() == openingBetType {
-                    let withdrawChallengerRaisedBet <- self.challengerRaisedBet.withdraw(amount: self.challengerRaisedBet.balance)
-                    tUSDTReceiverReference.deposit(from: <- withdrawChallengerRaisedBet)
-                }
-            }
+            let capability = compositionContractAccount.getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+            let flowReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the Flow token receiver capability")
+            let withdrawBet <- self.openingBet.withdraw(amount: self.openingBet.balance)
+            flowReceiverReference.deposit(from: <- withdrawBet)
+
+            let withdrawHostRaisedBet <- self.hostRaisedBet.withdraw(amount: self.hostRaisedBet.balance)
+            flowReceiverReference.deposit(from: <- withdrawHostRaisedBet)
+
+            let withdrawChallengerRaisedBet <- self.challengerRaisedBet.withdraw(amount: self.challengerRaisedBet.balance)
+            flowReceiverReference.deposit(from: <- withdrawChallengerRaisedBet)
         }
 
         destroy() {
