@@ -118,12 +118,12 @@ pub contract MatchContract {
         pre {
             self.registerActive: "Registration is not active."
         }
+        var currentIndex = self.nextIndex
+
         let key = host.toString().toLower()
 
         let matchGroups = self.addressGroupMap[key] ?? {}
         let waitingGroup: [UInt32] = matchGroups[MatchStatus.waiting] ?? []
-
-        var currentIndex = self.nextIndex
 
         waitingGroup.append(currentIndex)
         matchGroups[MatchStatus.waiting] = waitingGroup
