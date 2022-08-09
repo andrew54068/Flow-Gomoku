@@ -1,14 +1,14 @@
- import Gomoku from "./Gomoku.cdc"
- import GomokuComposition from "./GomokuComposition.cdc"
+import GomokuIdentifying from "./GomokuInterfaces.cdc"
+import GomokuType from "./GomokuType.cdc"
 
-pub contract GomokuIdentity {
+pub contract GomokuIdentity: GomokuIdentifying {
 
     // Paths
     pub let CollectionStoragePath: StoragePath
     pub let CollectionPublicPath: PublicPath
 
     // Events
-    pub event Create(id: UInt32, address: Address, role: Gomoku.Role)
+    pub event Create(id: UInt32, address: Address, role: UInt8)
     pub event CollectionCreated()
     pub event Withdraw(id: UInt32, from: Address?)
     pub event Deposit(id: UInt32, to: Address?)
@@ -18,23 +18,19 @@ pub contract GomokuIdentity {
         self.CollectionPublicPath = /public/gomokuIdentityCollection
     }
 
-    pub resource interface IdentitySwitching {
-        access(account) fun switchIdentity()
-    }
-
-    pub resource IdentityToken: IdentitySwitching {
+    pub resource IdentityToken: GomokuIdentifying.IdentityTokening {
         pub let id: UInt32
         pub let address: Address
-        pub let role: Gomoku.Role
-        pub var stoneColor: GomokuComposition.StoneColor
+        pub let role: GomokuType.Role
+        pub var stoneColor: GomokuType.StoneColor
 
         priv var destroyable: Bool
 
         init(
             id: UInt32,
             address: Address,
-            role: Gomoku.Role,
-            stoneColor: GomokuComposition.StoneColor
+            role: GomokuType.Role,
+            stoneColor: GomokuType.StoneColor
         ) {
             self.id = id
             self.address = address
@@ -45,10 +41,10 @@ pub contract GomokuIdentity {
 
         access(account) fun switchIdentity() {
             switch self.stoneColor {
-            case GomokuComposition.StoneColor.black:
-                self.stoneColor = GomokuComposition.StoneColor.white
-            case GomokuComposition.StoneColor.white:
-                self.stoneColor = GomokuComposition.StoneColor.black
+            case GomokuType.StoneColor.black:
+                self.stoneColor = GomokuType.StoneColor.white
+            case GomokuType.StoneColor.white:
+                self.stoneColor = GomokuType.StoneColor.black
             }
         }
 
@@ -63,16 +59,16 @@ pub contract GomokuIdentity {
         }
     }
 
-    access(self) fun createIdentity(
+    access(account) fun createIdentity(
         id: UInt32,
         address: Address,
-        role: Gomoku.Role,
-        stoneColor: GomokuComposition.StoneColor
-    ): @IdentityToken {
+        role: GomokuType.Role,
+        stoneColor: GomokuType.StoneColor
+    ): @AnyResource{GomokuIdentifying.IdentityTokening} {
         emit Create(
             id: id, 
             address: address, 
-            role: role)
+            role: role.rawValue)
 
         return <- create IdentityToken(
             id: id,
@@ -82,12 +78,12 @@ pub contract GomokuIdentity {
         )
     }
 
-    pub resource IdentityCollection {
+    pub resource IdentityCollection: GomokuIdentifying.IdentityCollecting {
 
         pub let StoragePath: StoragePath
         pub let PublicPath: PublicPath
 
-        priv var ownedIdentityTokenMap: @{UInt32: IdentityToken}
+        priv var ownedIdentityTokenMap: @{UInt32: AnyResource{GomokuIdentifying.IdentityTokening}}
         priv var destroyable: Bool
 
         init () {
@@ -97,16 +93,19 @@ pub contract GomokuIdentity {
             self.PublicPath = /public/compositionIdentity
         }
 
-        access(account) fun withdraw(by id: UInt32): @IdentityToken {
-            let token <- self.ownedIdentityTokenMap.remove(key: id) ?? panic("missing Composition")
-            emit Withdraw(id: token.id, from: self.owner?.address)
-            if self.ownedIdentityTokenMap.keys.length == 0 {
-                self.destroyable = true
+        access(account) fun withdraw(by id: UInt32): @AnyResource{GomokuIdentifying.IdentityTokening}? {
+            if let token <- self.ownedIdentityTokenMap.remove(key: id) {
+                emit Withdraw(id: token.id, from: self.owner?.address)
+                if self.ownedIdentityTokenMap.keys.length == 0 {
+                    self.destroyable = true
+                }
+                return <- token
+            } else {
+                return nil
             }
-            return <- token
         }
 
-        access(account) fun deposit(token: @IdentityToken) {
+        access(account) fun deposit(token: @AnyResource{GomokuIdentifying.IdentityTokening}) {
             let token <- token
             let id: UInt32 = token.id
             let oldToken <- self.ownedIdentityTokenMap[id] <- token
@@ -123,8 +122,8 @@ pub contract GomokuIdentity {
             return self.ownedIdentityTokenMap.keys.length
         }
 
-        pub fun borrow(id: UInt32): &IdentityToken {
-            return (&self.ownedIdentityTokenMap[id] as &Gomoku.IdentityToken?)!
+        pub fun borrow(id: UInt32): &AnyResource{GomokuIdentifying.IdentityTokening}? {
+            return &self.ownedIdentityTokenMap[id] as &AnyResource{GomokuIdentifying.IdentityTokening}?
         }
 
         destroy() {
@@ -135,7 +134,7 @@ pub contract GomokuIdentity {
         }
     }
 
-    access(self) fun createEmptyVault(): @CompositionCollection {
+    access(account) fun createEmptyVault(): @IdentityCollection {
         emit CollectionCreated()
         return <- create IdentityCollection()
     }

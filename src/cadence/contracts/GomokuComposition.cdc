@@ -1,7 +1,10 @@
-import Gomoku from "./Gomoku.cdc"
-import GomokuIdentity from "./GomokuIdentity.cdc"
+import FlowToken from "./FlowToken.cdc"
+import Gomokuing from "./Gomokuing.cdc"
+import GomokuCompositioning from "./GomokuCompositioning.cdc"
+import GomokuResulting from "./GomokuResulting.cdc"
+import GomokuType from "./GomokuType.cdc"
 
-pub contract GomokuComposition {
+pub contract GomokuComposition: GomokuCompositioning {
 
     // Paths
     pub let CollectionStoragePath: StoragePath
@@ -15,49 +18,35 @@ pub contract GomokuComposition {
     pub event Withdraw(id: UInt32, from: Address?)
     pub event Deposit(id: UInt32, to: Address?)
 
+    pub event CollectionNotFound(type: Type, path: Path, address: Address)
+    pub event ResourceNotFound(id: UInt32, type: Type, address: Address)
+
+    pub event makeMove(location: StoneLocation, GomokuType.StoneColor: GomokuType.StoneColor)
+
     init() {
         self.CollectionStoragePath = /storage/gomokuCompositionCollection
         self.CollectionPublicPath = /public/gomokuCompositionCollection
     }
 
-    pub resource interface PublicCompositioning {
-        // Script
-        pub fun getTimeout(): UInt64
-        pub fun getStoneData(for: UInt8): [StoneData]
-        pub fun getParticipants(): [Address]
-
-        // Transaction
-        access(account) fun match(
-            challenger: Address
-        ): @IdentityToken
-
-        pub fun makeMove(
-            identityToken: @GomokuIdentity.IdentityToken,
-            stone: @Stone,
-            raisedBet: @FlowToken.Vault,
-            hasRoundWinnerCallback: ((Bool): Void)
-        ): @IdentityToken
-    }
-
-    pub resource Composition: PublicCompositioning {
+    pub resource Composition: GomokuCompositioning.Compositioning {
 
         pub let id: UInt32
 
         pub let boardSize: UInt8
         pub let totalRound: UInt8
-        pub var currentRound: UInt8
-
-        priv var winner: Gomoku.Role?
-
-        priv var host: Address
-        priv var challenger: Address?
-        priv var roundWiners: [Gomoku.Role]
-        priv var steps: @[[Stone]]
-        priv var locationStoneMap: {String:StoneColor}
+        pub var currentRound: 
 
         // timeout of block height
         pub var latestBlockHeight: UInt64
         pub var blockHeightTimeout: UInt64
+
+        priv var winner: GomokuType.Role?
+
+        priv var host: Address
+        priv var challenger: Address?
+        priv var roundWiners: [GomokuType.Role]
+        priv var steps: @[[Stone]]
+        priv var locationStoneMap: {String:GomokuType.StoneColor}
 
         init(
             id: UInt32,
@@ -101,7 +90,7 @@ pub contract GomokuComposition {
             var placeholderArray: @[Stone] <- []
             self.steps[self.currentRound] <-> placeholderArray
             var placeholderStone <- create Stone(
-                color: StoneColor.black,
+                color: GomokuType.StoneColor.black,
                 location: StoneLocation(x: 0, y: 0)
             )
             var stoneData: [StoneData] = []
@@ -130,31 +119,15 @@ pub contract GomokuComposition {
         }
 
         // Transaction
-        access(account) fun match(challenger: Address): @GomokuIdentity.IdentityToken {
-            pre {
-                self.challenger == nil: "Already matched."
-            }
-            self.challenger = challenger
-
-            // generate identity token to identify who take what stone in case someone takes other's move.
-            let identity <- create IdentityToken(
-                id: self.id,
-                address: challenger,
-                role: Gomoku.Role.challenger,
-                stoneColor: StoneColor.black
-            )
-            return <- identity
-        }
-
         pub fun makeMove(
-            identityToken: @GomokuIdentity.IdentityToken,
+            identityToken: @AnyResource{GomokuIdentifying.IdentityTokening},
             stone: @Stone,
             raisedBet: @FlowToken.Vault,
             hasRoundWinnerCallback: ((Bool): Void)
-        ): @GomokuIdentity.IdentityToken {
+        ): @AnyResource{GomokuIdentifying.IdentityTokening}? {
             // check identity
             pre {
-                identityToken.stoneColor == stone.color: "You are not suppose to make this move."
+                identityToken.GomokuType.StoneColor == stone.color: "You are not suppose to make this move."
                 identityToken.id == self.id: "You are not authorized to make this move."
                 identityToken.owner?.address == identityToken.address: "Identity token should not be transfer to other."
                 Int(self.currentRound) + 1 > self.roundWiners.length: "Game Over."
@@ -168,39 +141,41 @@ pub contract GomokuComposition {
             )
 
             let lastRole = self.getRole()
-            var currentRole = Gomoku.Role.host
+            var currentRole = GomokuType.Role.host
             switch lastRole {
-            case Gomoku.Role.host:
-                currentRole = Gomoku.Role.challenger
+            case GomokuType.Role.host:
+                currentRole = GomokuType.Role.challenger
                 assert(self.challenger != nil, message: "Challenger not found.")
                 assert(identityToken.address == self.challenger!, message: "It's not you turn yet!")
-            case Gomoku.Role.challenger:
-                currentRole = Gomoku.Role.host
+            case GomokuType.Role.challenger:
+                currentRole = GomokuType.Role.host
                 assert(identityToken.address == self.host, message: "It's not you turn yet!")
+            default:
+                panic("Should not be the case.")
             }
 
             switch currentRole {
-            case Gomoku.Role.host:
+            case GomokuType.Role.host:
                 var emptyBet: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
-                var hostRaisedBet <- Gomoku.hostRaisedBetMap[self.id] <- emptyBet
+                var hostRaisedBet <- Gomokuing.hostRaisedBetMap[self.id] <- emptyBet
                 if let oldBet <- hostRaisedBet {
                     oldBet.deposit(from: <- raisedBet)
-                    let empty <- Gomoku.hostRaisedBetMap[self.id] <- oldBet
+                    let empty <- Gomokuing.hostRaisedBetMap[self.id] <- oldBet
                     destroy empty
                 } else {
-                    let empty <- Gomoku.hostRaisedBetMap[self.id] <- raisedBet
+                    let empty <- Gomokuing.hostRaisedBetMap[self.id] <- raisedBet
                     destroy empty
                     destroy hostRaisedBet
                 }
-            case Gomoku.Role.challenger:
+            case GomokuType.Role.challenger:
                 var emptyBet: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
-                var hostRaisedBet <- Gomoku.challengerRaisedBetMap[self.id] <- emptyBet
+                var hostRaisedBet <- Gomokuing.challengerRaisedBetMap[self.id] <- emptyBet
                 if let oldBet <- hostRaisedBet {
                     oldBet.deposit(from: <- raisedBet)
-                    let empty <- Gomoku.challengerRaisedBetMap[self.id] <- oldBet
+                    let empty <- Gomokuing.challengerRaisedBetMap[self.id] <- oldBet
                     destroy empty
                 } else {
-                    let empty <- Gomoku.challengerRaisedBetMap[self.id] <- raisedBet
+                    let empty <- Gomokuing.challengerRaisedBetMap[self.id] <- raisedBet
                     destroy empty
                     destroy hostRaisedBet
                 }
@@ -213,6 +188,9 @@ pub contract GomokuComposition {
             // validate move
             self.verifyAndStoreStone(stone: <- stone)
 
+            // reset timeout
+            self.latestBlockHeight = getCurrentBlock().height
+
             let hasRoundWinner = self.checkWinnerInAllDirection(
                 targetColor: stoneRef.color,
                 center: stoneRef.location)
@@ -220,30 +198,29 @@ pub contract GomokuComposition {
                 self.roundWiners.append(identityToken.role)
                 // event
                 // end of current round
-                hasRoundWinnerCallback(hasRoundWinner)
-                // if self.currentRound + UInt8(1) < self.totalRound {
-                //     self.switchRound()
-                // } else {
-                //     // end of game
-                //     // distribute reward
-                //     self.distributeReward(abort: false)
-                // }
+                // hasRoundWinnerCallback(hasRoundWinner)
+                if self.currentRound + UInt8(1) < self.totalRound {
+                    self.switchRound()
+                } else {
+                    // end of game
+                    self.finalize(identityToken: <- identityToken)
+                    return nil
+                }
             }
-
-            // reset timeout
-            self.latestBlockHeight = getCurrentBlock().height
             return <- identityToken
         }
 
-        pub fun surrender(identityToken: @GomokuIdentity.IdentityToken): @GomokuIdentity.IdentityToken? {
+        pub fun surrender(identityToken: @AnyResource{GomokuIdentifying.IdentityTokening}): @AnyResource{GomokuIdentifying.IdentityTokening}? {
             pre {
                 identityToken.id == self.id: "You are not authorized to make this move."
             }
             switch identityToken.role {
-            case Gomoku.Role.host:
-                self.roundWiners[self.currentRound] = Gomoku.Role.challenger
-            case Gomoku.Role.challenger:
-                self.roundWiners[self.currentRound] = Gomoku.Role.host
+            case GomokuType.Role.host:
+                self.roundWiners[self.currentRound] = GomokuType.Role.challenger
+            case GomokuType.Role.challenger:
+                self.roundWiners[self.currentRound] = GomokuType.Role.host
+            default:
+                panic("Should not be the case.")
             }
             if self.currentRound + 1 < self.totalRound {
                 // switch to next round
@@ -251,19 +228,35 @@ pub contract GomokuComposition {
                 return <- identityToken
             } else {
                 // final round
-                self.finalize()
-                destroy identityToken
+                self.finalize(identityToken: <- identityToken)
                 return nil
             }
         }
 
-        pub fun finalize() {
-            // distribute reward
-            self.distributeReward()
+        // Can only match by Gomoku.cdc to prevent from potential attack.
+        access(account) fun match(
+            identityCollectionRef: &AnyResource{GomokuIdentifying.IdentityCollecting},
+            challenger: Address
+        ) {
+            pre {
+                self.challenger == nil: "Already matched."
+            }
+            self.challenger = challenger
+
+            // generate identity token to identify who take what stone in case someone takes other's move.
+            let identity <- GomokuIdentifying.createIdentity(
+                id: self.id,
+                address: challenger,
+                role: GomokuType.Role.challenger,
+                GomokuType.StoneColor: GomokuType.StoneColor.black
+            )
+            identityCollectionRef.deposit(token: <- identity)
         }
 
         // Restricted to prevent from potential attack.
-        access(account) fun finalizeByTimeout() {
+        access(account) fun finalizeByTimeout(
+            identityToken: @AnyResource{GomokuIdentifying.IdentityTokening}
+        ): @AnyResource{GomokuIdentifying.IdentityTokening}? {
             pre {
                 getCurrentBlock().height > self.getTimeout(): "Let's give opponent more time to think......"
             }
@@ -272,54 +265,314 @@ pub contract GomokuComposition {
             self.roundWiners.append(lastRole)
             if self.currentRound + UInt8(1) < self.totalRound {
                 self.switchRound()
+                return <- identityToken
             } else {
                 // end of game
                 // distribute reward
-                self.finalize()
+                self.finalize(identityToken: <- identityToken)
+                return nil
             }
         }
 
-        priv fun mintCompositionResult(identityToken: @GomokuIdentity.IdentityToken) {
-            let resultCapability = getAccount(identityToken.address).getCapability<&Gomoku.ResultCollection>(Gomoku.ResultCollectionPublicPath)
-            let resultCollectionRef = resultCapability.borrow() ?? panic("Could not borrow a reference to the host capability.")
+        // Private Method
+        priv fun finalize(identityToken: @AnyResource{GomokuIdentifying.IdentityTokening}) {
+            pre {
+                self.roundWiners.length == Int(self.totalRound): "Game not over yet!"
+                self.challenger != nil: "Challenger not found."
+                Gomokuing.hostOpeningBetMap.keys.contains(identityToken.id): "Host's OpeningBet not found."
+                Gomokuing.challengerOpeningBetMap.keys.contains(identityToken.id): "Challenger's OpeningBet not found."
+                Gomokuing.hostRaisedBetMap.keys.contains(identityToken.id): "Host's RaisedBet not found."
+                Gomokuing.challengerRaisedBetMap.keys.contains(identityToken.id): "Challenger's RaisedBet not found."
+            }
+
+            // Flow Receiver
+            let devFlowTokenReceiver = GomokuComposition.account
+                .getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+                .borrow() ?? panic("Could not borrow a reference to the dev flowTokenReceiver capability.")
+
+            let hostFlowTokenReceiver = getAccount(self.host)
+                .getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+                .borrow() ?? panic("Could not borrow a reference to the dev flowTokenReceiver capability.")
+
+            let challengerFlowTokenReceiver = getAccount(self.challenger!)
+                .getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+                .borrow() ?? panic("Could not borrow a reference to the dev flowTokenReceiver capability.")
+
+            // withdraw reward
+            let tatalVault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+            let hostOpeningBet <- Gomokuing.hostOpeningBetMap[identityToken.id] <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+            let challengerOpeningBet <- Gomokuing.challengerOpeningBetMap[identityToken.id] <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+            destroy Gomokuing.hostOpeningBetMap.remove(key: identityToken.id)
+            destroy Gomokuing.challengerOpeningBetMap.remove(key: identityToken.id)
+            tatalVault.deposit(from: <- hostOpeningBet)
+            tatalVault.deposit(from: <- challengerOpeningBet)
+
+            let hostRaisedBet <- Gomokuing.hostRaisedBetMap[identityToken.id]! <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+            let challengerRaisedBet <- Gomokuing.challengerRaisedBetMap[identityToken.id]! <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+            if hostRaisedBet.balance == challengerRaisedBet.balance {
+                tatalVault.deposit(from: <- hostRaisedBet)
+                tatalVault.deposit(from: <- challengerRaisedBet)
+            } else if hostRaisedBet.balance > challengerRaisedBet.balance {
+                let backToHost <- hostRaisedBet.withdraw(amount: hostRaisedBet.balance - challengerRaisedBet.balance)
+                hostFlowTokenReceiver.deposit(from: <- backToHost)
+                tatalVault.deposit(from: <- hostRaisedBet)
+                tatalVault.deposit(from: <- challengerRaisedBet)
+            } else {
+                let backToChallenger <- challengerRaisedBet.withdraw(amount: challengerRaisedBet.balance - hostRaisedBet.balance)
+                challengerFlowTokenReceiver.deposit(from: <- backToChallenger)
+                tatalVault.deposit(from: <- hostRaisedBet)
+                tatalVault.deposit(from: <- challengerRaisedBet)
+            }
+            let totalReward = tatalVault.balance
+            destroy Gomokuing.hostRaisedBetMap.remove(key: identityToken.id)
+            destroy Gomokuing.challengerRaisedBetMap.remove(key: identityToken.id)
+
+            let devReward: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+            let hostReward: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+            let challengerReward: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+            let winnerReward: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+            let losserReward: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+            let result = self.getWinnerResult()
+            switch result {
+            case GomokuType.Result.hostWins:
+                // developer get 5% for developing this game
+                // host get extra 1% for being host.
+                // winner get 94%
+                let devRewardBalance = tatalVault.balance * UFix64(5) / UFix64(100)
+                let hostRewardBalance = tatalVault.balance * UFix64(1) / UFix64(100)
+                let winnerRewardBalance = tatalVault.balance - devRewardBalance - hostRewardBalance
+                devReward.deposit(from: <- tatalVault.withdraw(amount: devRewardBalance))
+                hostReward.deposit(from: <- tatalVault.withdraw(amount: hostRewardBalance))
+                winnerReward.deposit(from: <- tatalVault.withdraw(amount: winnerRewardBalance))
+                destroy tatalVault
+            case GomokuType.Result.challengerWins:
+                // developer get 5% for developing this game
+                // host get extra 1% for being host.
+                // winner get 94%.
+                let devRewardBalance = tatalVault.balance * UFix64(5) / UFix64(100)
+                let winnerRewardBalance = tatalVault.balance - devRewardBalance
+                devReward.deposit(from: <- tatalVault.withdraw(amount: devRewardBalance))
+                winnerReward.deposit(from: <- tatalVault.withdraw(amount: winnerRewardBalance))
+                destroy tatalVault
+            case GomokuType.Result.draw:
+                // draw
+                // developer get 2% for developing this game
+                // each player get 49%.
+                let hostRewardBalance = tatalVault.balance * UFix64(49) / UFix64(100)
+                let challengerRewardBalance = tatalVault.balance * UFix64(49) / UFix64(100)
+                let devRewardBalance = tatalVault.balance - hostRewardBalance - challengerRewardBalance
+                devReward.deposit(from: <- tatalVault.withdraw(amount: devRewardBalance))
+                hostReward.deposit(from: <- tatalVault.withdraw(amount: hostRewardBalance))
+                challengerReward.deposit(from: <- tatalVault.withdraw(amount: challengerRewardBalance))
+                destroy tatalVault
+            default:
+                panic("Should not be the case.")
+            }
+
+            devFlowTokenReceiver.deposit(from: <- devReward)
+
+            // Identity collection check
+            let identityTokenId = identityToken.id
+
+            if identityToken.address == self.host {
+                if let identityCollectionRef = getAccount(self.challenger!)
+                    .getCapability<&GomokuIdentifying.IdentityCollection>(GomokuIdentifying.CollectionPublicPath)
+                    .borrow() {
+                    if let challengerIdentityToken <- identityCollectionRef.withdraw(by: identityTokenId) {
+                        destroy challengerIdentityToken
+                    } else {
+                        emit ResourceNotFound(
+                            id: identityTokenId,
+                            type: Type<AnyResource{GomokuIdentifying.IdentityTokening}>(),
+                            address: self.challenger!)
+                    }
+                } else {
+                    emit CollectionNotFound(
+                        type: Type<AnyResource{GomokuIdentifying.IdentityCollecting}>(),
+                        path: GomokuIdentifying.CollectionPublicPath,
+                        address: self.challenger!)
+                }
+            } else if identityToken.address == self.challenger {
+                if let identityCollectionRef = getAccount(self.host)
+                    .getCapability<&GomokuIdentifying.IdentityCollection>(GomokuIdentifying.CollectionPublicPath)
+                    .borrow() {
+                    if let hostIdentityToken <- identityCollectionRef.withdraw(by: identityTokenId) {
+                        destroy hostIdentityToken
+                    } else {
+                        emit ResourceNotFound(
+                            id: identityTokenId,
+                            type: Type<AnyResource{GomokuIdentifying.IdentityTokening}>(),
+                            address: self.host)
+                    }
+                } else {
+                    emit CollectionNotFound(
+                        type: Type<AnyResource{GomokuIdentifying.IdentityCollecting}>(),
+                        path: GomokuIdentifying.CollectionPublicPath,
+                        address: self.host)
+                }
+            }
+            destroy identityToken
+
+            self.mintCompositionResults(
+                id: identityTokenId,
+                totalReward: totalReward,
+                winnerReward: winnerReward.balance,
+                hostReward: hostReward.balance,
+                challengerReward: challengerReward.balance
+            )
+
+            switch result {
+            case GomokuType.Result.hostWins:
+                hostFlowTokenReceiver.deposit(from: <- winnerReward)
+                challengerFlowTokenReceiver.deposit(from: <- losserReward)
+            case GomokuType.Result.challengerWins:
+                hostFlowTokenReceiver.deposit(from: <- losserReward)
+                challengerFlowTokenReceiver.deposit(from: <- winnerReward)
+            case GomokuType.Result.draw:
+                destroy winnerReward
+                destroy losserReward
+            default:
+                panic("Should not be the case.")
+            }
+
+            hostFlowTokenReceiver.deposit(from: <- hostReward)
+            challengerFlowTokenReceiver.deposit(from: <- challengerReward)
+        }
+
+        priv fun mintCompositionResults(
+            id: UInt32,
+            totalReward: UFix64,
+            winnerReward: UFix64,
+            hostReward: UFix64,
+            challengerReward: UFix64
+        ) {
+            pre {
+                self.challenger != nil: "Challenger not found."
+            }
+
+            // get steps data
             var steps: [[StoneData]] = []
             var index: UInt8 = 0
             while index < self.totalRound {
                 steps.append(self.getStoneData(for: index))
                 index = index + UInt8(1)
             }
-            let resultToken <- create ResultToken(
-                id: identityToken.id,
-                steps: steps,
-                winner: Address,
-                losser: Address,
-                gain: Fix64(0)
-            )
-            resultCollectionRef.deposit(token: <- resultToken)
-            identityToken.setDestroyable(true)
-            destroy identityToken
+
+            let winnerResultCollection: @AnyResource{GomokuResulting.ResultCollecting} <- GomokuResulting.createEmptyVault()
+            let losserResultCollection: @AnyResource{GomokuResulting.ResultCollecting} <- GomokuResulting.createEmptyVault()
+            var winnerAddress: Address = self.host
+            var losserAddress: Address = self.host
+            let result = self.getWinnerResult()
+            switch result {
+            case GomokuType.Result.hostWins:
+                winnerAddress = self.host
+                losserAddress = self.challenger!
+
+                let winnerResultToken <- GomokuResulting.createResult(
+                    id: id,
+                    winner: winnerAddress,
+                    losser: losserAddress,
+                    gain: winnerReward + hostReward,
+                    steps: steps
+                )
+                winnerResultCollection.deposit(token: <- winnerResultToken)
+
+                let losserResultToken <- GomokuResulting.createResult(
+                    id: id,
+                    winner: winnerAddress,
+                    losser: losserAddress,
+                    gain: -Fix64(totalReward / UFix64(2)),
+                    steps: steps
+                )
+                losserResultCollection.deposit(from: <- losserResultToken)
+            case GomokuType.Result.challengerWins:
+                winnerAddress = self.challenger!
+                losserAddress = self.host
+
+                let winnerResultToken <- GomokuResulting.createResult(
+                    id: id,
+                    winner: winnerAddress,
+                    losser: losserAddress,
+                    gain: winnerReward + challengerReward,
+                    steps: steps
+                )
+                winnerResultCollection.deposit(token: <- winnerResultToken)
+
+                let losserResultToken <- GomokuResulting.createResult(
+                    id: id,
+                    winner: winnerAddress,
+                    losser: losserAddress,
+                    gain: -Fix64(totalReward / UFix64(2)) + Fix64(hostReward),
+                    steps: steps
+                )
+                losserResultCollection.deposit(from: <- losserResultToken)
+            case GomokuType.Result.draw:
+                winnerAddress = self.host
+                losserAddress = self.challenger!
+
+                let drawResultToken1 <- GomokuResulting.createResult(
+                    id: id,
+                    winner: nil,
+                    losser: nil,
+                    gain: Fix64(0),
+                    steps: steps
+                )
+                winnerResultCollection.deposit(token: <- drawResultToken1)
+
+                let drawResultToken2 <- GomokuResulting.createResult(
+                    id: id,
+                    winner: nil,
+                    losser: nil,
+                    gain: Fix64(0),
+                    steps: steps
+                )
+                losserResultCollection.deposit(from: <- drawResultToken2)
+            default:
+                panic("Should not be the case.")
+            }
+
+            let winnerResultToken <-! winnerResultCollection.withdraw(by: id)
+            let losserResultToken <-! losserResultCollection.withdraw(by: id)
+
+            if let winnerResultCollectionCapability = getAccount(self.winnerAddress)
+                .getCapability<&GomokuResulting.ResultCollection>(GomokuResulting.CollectionPublicPath)
+                .borrow() {
+                winnerResultCollectionCapability.deposit(token: <- winnerResultToken)
+            } else {
+                winnerResultToken.setDestroyable(true)
+                destroy winnerResultToken
+            }
+            
+            if let losserResultCollectionCapability = getAccount(self.losserAddress)
+                .getCapability<&GomokuResulting.ResultCollection>(GomokuResulting.CollectionPublicPath)
+                .borrow() {
+                losserResultCollectionCapability.deposit(token: <- losserResultToken)
+            } else {
+                losserResultToken.setDestroyable(true)
+                destroy losserResultToken
+            }
+        
         }
 
-        // Private Method
         // Challenger go first in first round
-        priv fun getRole(): Gomoku.Role {
+        priv fun getRole(): GomokuType.Role {
             if self.currentRound % 2 == 0 {
                 // first move is challenger if index is even
                 if self.steps.length % 2 == 0 {
                     // step for challenger
-                    return Gomoku.Role.challenger
+                    return GomokuType.Role.challenger
                 } else {
                     // step for host
-                    return Gomoku.Role.host
+                    return GomokuType.Role.host
                 }
             } else {
                 // first move is host if index is odd
                 if self.steps.length % 2 == 0 {
                     // step for host
-                    return Gomoku.Role.host
+                    return GomokuType.Role.host
                 } else {
                     // step for challenger
-                    return Gomoku.Role.challenger
+                    return GomokuType.Role.challenger
                 }
             }
         }
@@ -336,14 +589,14 @@ pub contract GomokuComposition {
             self.currentRound = self.currentRound + 1
 
             let hostIdentityCollectionCapability = getAccount(self.host)
-                .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
+                .getCapability<&GomokuIdentifying.IdentityCollection>(GomokuIdentifying.CollectionPublicPath)
                 .borrow() ?? panic("Could not borrow a reference to the host capability.")
             hostIdentityCollectionCapability.borrow(id: self.id).switchIdentity()
 
             assert(self.challenger != nil, message: "Challenger not found.")
 
             let challengerIdentityCollectionCapability = getAccount(self.challenger!)
-                .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
+                .getCapability<&GomokuIdentifying.IdentityCollection>(GomokuIdentifying.CollectionPublicPath)
                 .borrow() ?? panic("Could not borrow a reference to the challenger capability.")
             challengerIdentityCollectionCapability.borrow(id: self.id).switchIdentity()
         }
@@ -364,15 +617,15 @@ pub contract GomokuComposition {
 
             if roundSteps.length % 2 == 0 {
                 // black stone move
-                assert(stone.color == StoneColor.black, message: "It should be black side's turn.")
+                assert(stone.color == GomokuType.StoneColor.black, message: "It should be black side's turn.")
             } else {
                 // white stone move
-                assert(stone.color == StoneColor.white, message: "It should be white side's turn.")
+                assert(stone.color == GomokuType.StoneColor.white, message: "It should be white side's turn.")
             }
 
-            let stoneColor = stone.color
+            let GomokuType.StoneColor = stone.color
             let stoneLocation = stone.location
-            self.locationStoneMap[stone.key()] = stoneColor
+            self.locationStoneMap[stone.key()] = GomokuType.StoneColor
             self.steps[self.currentRound].append(<- stone)
         }
 
@@ -392,35 +645,35 @@ pub contract GomokuComposition {
             return true
         }
 
-        priv fun checkWinnerInAllDirection(targetColor: StoneColor, center: StoneLocation): Bool {
+        priv fun checkWinnerInAllDirection(targetColor: GomokuType.StoneColor, center: StoneLocation): Bool {
             return self.checkWinner(
                     targetColor: targetColor,
                     center: center,
-                    direction: VerifyDirection.vertical)
+                    direction: GomokuType.VerifyDirection.vertical)
                 || self.checkWinner(
                     targetColor: targetColor,
                     center: center, 
-                    direction: VerifyDirection.horizontal)
+                    direction: GomokuType.VerifyDirection.horizontal)
                 || self.checkWinner(
                     targetColor: targetColor,
                     center: center, 
-                    direction: VerifyDirection.diagonal)
+                    direction: GomokuType.VerifyDirection.diagonal)
                 || self.checkWinner(
                     targetColor: targetColor,
                     center: center, 
-                    direction: VerifyDirection.reversedDiagonal)
+                    direction: GomokuType.VerifyDirection.reversedDiagonal)
         }
 
         priv fun checkWinner(
-            targetColor: StoneColor,
+            targetColor: GomokuType.StoneColor,
             center: StoneLocation,
-            direction: VerifyDirection
+            direction: GomokuType.VerifyDirection
         ): Bool {
             var countInRow: UInt8 = 1
             var shift: Int8 = 1
             var isFinished: Bool = false
             switch direction {
-            case VerifyDirection.vertical:
+            case GomokuType.VerifyDirection.vertical:
                 while !isFinished
                         && shift <= Int8(4)
                         && center.x - shift >= Int8(0) {
@@ -453,7 +706,7 @@ pub contract GomokuComposition {
                     }
                     shift = shift + Int8(1)
                 }
-            case VerifyDirection.horizontal:
+            case GomokuType.VerifyDirection.horizontal:
                 while !isFinished
                         && shift <= Int8(4)
                         && center.y - shift >= Int8(0) {
@@ -486,7 +739,7 @@ pub contract GomokuComposition {
                     }
                     shift = shift + Int8(1)
                 }
-            case VerifyDirection.diagonal:
+            case GomokuType.VerifyDirection.diagonal:
                 while !isFinished
                         && shift <= Int8(4)
                         && center.x - shift >= Int8(0)
@@ -521,7 +774,7 @@ pub contract GomokuComposition {
                     }
                     shift = shift + Int8(1)
                 }
-            case VerifyDirection.reversedDiagonal:
+            case GomokuType.VerifyDirection.reversedDiagonal:
                 while !isFinished
                         && shift <= Int8(4)
                         && center.x - shift >= Int8(0)
@@ -560,7 +813,7 @@ pub contract GomokuComposition {
             return countInRow >= UInt8(5)
         }
 
-        priv fun distributeReward() {
+        priv fun getWinnerResult(): GomokuType.Result {
             pre {
                 self.roundWiners.length == Int(self.totalRound): "Game not over yet!"
             }
@@ -571,23 +824,15 @@ pub contract GomokuComposition {
                 let winner = firstRoundWinner
                 // has winner
                 switch winner {
-                case Gomoku.Role.host:
-                    // developer get 5% for developing this game
-                    // host get extra 1% for being host.
-                    // winner get 94%
-
-                case Gomoku.Role.challenger:
-                    // developer get 5% for developing this game
-                    // host get extra 1% for being host.
-                    // winner get 94%.
-
-                // default:
-                //     panic("Should not be the case.")
+                case GomokuType.Role.host:
+                    return GomokuType.Result.hostWins
+                case GomokuType.Role.challenger:
+                    return GomokuType.Result.challengerWins
+                default:
+                    panic("Should not be the case.")
                 }
             } else {
-                // draw
-                // developer get 2% for developing this game
-                // each player get 49%.
+                return GomokuType.Result.draw
             }
         }
 
@@ -597,7 +842,7 @@ pub contract GomokuComposition {
 
     }
 
-    access(self) fun createComposition(
+    access(account) fun createComposition(
         id: UInt32,
         host: Address,
         boardSize: UInt8,
@@ -615,7 +860,7 @@ pub contract GomokuComposition {
         return <- Composition
     }
 
-    pub resource CompositionCollection {
+    pub resource CompositionCollection: GomokuCompositioning.CompositionCollecting {
 
         pub let StoragePath: StoragePath
         pub let PublicPath: PublicPath
@@ -639,7 +884,7 @@ pub contract GomokuComposition {
             return <- token
         }
 
-        access(account) pub fun deposit(token: @Composition) {
+        access(account) fun deposit(token: @Composition) {
             let token <- token
             let id: UInt32 = token.id
             let oldToken <- self.ownedCompositionMap[id] <- token
@@ -653,11 +898,11 @@ pub contract GomokuComposition {
         }
 
         pub fun getBalance(): Int {
-            return ownedCompositionMap.keys.length
+            return self.ownedCompositionMap.keys.length
         }
 
-        pub fun borrow(id: UInt32): &Composition {
-            return (&self.ownedCompositionMap[id] as &Composition?)!
+        pub fun borrow(id: UInt32): &Composition? {
+            return &self.ownedCompositionMap[id] as &Composition?
         }
 
         destroy() {
@@ -668,18 +913,12 @@ pub contract GomokuComposition {
         }
     }
 
-    access(self) fun createEmptyVault(): @CompositionCollection {
+    access(account) fun createEmptyVault(): @CompositionCollection {
         emit CollectionCreated()
         return <- create CompositionCollection()
     }
 
-    pub enum StoneColor: UInt8 {
-        // block stone go first
-        pub case black
-        pub case white
-    }
-
-    pub struct StoneLocation {
+    pub struct StoneLocation: GomokuType.StoneLocating {
 
         pub let x: Int8
         pub let y: Int8
@@ -699,12 +938,12 @@ pub contract GomokuComposition {
 
     }
 
-    pub struct StoneData {
-        pub let color: StoneColor
+    pub struct StoneData: GomokuType.StoneDataing {
+        pub let color: GomokuType.StoneColor
         pub let location: StoneLocation
 
         init(
-            color: StoneColor,
+            color: GomokuType.StoneColor,
             location: StoneLocation
         ) {
             self.color = color
@@ -712,12 +951,12 @@ pub contract GomokuComposition {
         }
     }
 
-    pub resource Stone {
-        pub let color: StoneColor
+    pub resource Stone: GomokuType.Stoning {
+        pub let color: GomokuType.StoneColor
         pub let location: StoneLocation
 
         init(
-            color: StoneColor,
+            color: GomokuType.StoneColor,
             location: StoneLocation
         ) {
             self.color = color
@@ -734,13 +973,6 @@ pub contract GomokuComposition {
                 location: self.location
             )
         }
-    }
-
-    pub enum VerifyDirection: UInt8 {
-        pub case vertical
-        pub case horizontal
-        pub case diagonal // "/"
-        pub case reversedDiagonal // "\"
     }
 
 }
