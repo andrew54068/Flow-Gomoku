@@ -116,6 +116,11 @@ describe("Matcher control", () => {
     )
     console.log(txResult, error)
 
+    const [registerTxResult, registerError] = await shallPass(
+      sendTransaction('TestMatcher-register', signers, args)
+    )
+    console.log(registerTxResult, registerError)
+
     const [result2, scriptError2] = await executeScript('Matcher-get-index', [])
     expect(scriptError2).toBeNull()
     expect(result2).toBe(1)
@@ -169,6 +174,11 @@ describe("Matcher control", () => {
     )
     console.log(txResult, error)
 
+    const [registerTxResult, registerError] = await shallPass(
+      sendTransaction('TestMatcher-register', signers, args)
+    )
+    console.log(registerTxResult, registerError)
+
     const bob = await getAccountAddress("Bob")
     const args2 = []
     const signers2 = [bob]
@@ -203,6 +213,11 @@ describe("Matcher control", () => {
     )
     console.log(txResult, error)
 
+    const [registerTxResult, registerError] = await shallPass(
+      sendTransaction('TestMatcher-register', signers, args)
+    )
+    console.log(registerTxResult, registerError)
+
     const [scriptResult, scriptError] = await executeScript('Matcher-get-random-waiting-index', [])
     expect(scriptError).toBeNull()
     expect(scriptResult).toBe(0)
@@ -229,6 +244,11 @@ describe("Matcher control", () => {
     )
     console.log(txResult, error)
 
+    const [registerTxResult, registerError] = await shallPass(
+      sendTransaction('TestMatcher-register', signers, args)
+    )
+    console.log(registerTxResult, registerError)
+
     const args2 = []
     const signers2 = [alice]
 
@@ -245,7 +265,8 @@ describe("Matcher control", () => {
     const args3 = [scriptResult]
     const signers3 = [bob]
 
-    const [txResult3, error3] = await shallPass(
+    // account access
+    const [txResult3, error3] = await shallRevert(
       sendTransaction('TestMatcher-match', signers3, args3)
     )
     console.log(txResult3, error3)
@@ -262,6 +283,11 @@ describe("Matcher control", () => {
       sendTransaction('TestMatcher-admin-active-register', signers, args)
     )
     console.log(txResult, error)
+
+    const [registerTxResult, registerError] = await shallPass(
+      sendTransaction('TestMatcher-register', signers, args)
+    )
+    console.log(registerTxResult, registerError)
 
     const args2 = []
     const signers2 = [alice]

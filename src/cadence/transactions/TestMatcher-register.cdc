@@ -8,6 +8,6 @@ transaction() {
   }
 
   execute {
-    MatchContract.register(host: self.signer)
+    MatchContract.register(host: self.signer.address)
   }
 }

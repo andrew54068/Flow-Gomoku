@@ -8,7 +8,6 @@ transaction(index: UInt32) {
   }
 
   execute {
-    let host = MatchContract.match(index: index, challenger: self.signer)
-    log("Hello, Cadence")
+    let host = MatchContract.match(index: index, challengerAddress: self.signer.address)
   }
 }

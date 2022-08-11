@@ -8,12 +8,11 @@ transaction() {
   }
 
   execute {
-    if let matchAdmin <- self.signer.load<@MatchContract.Admin>(from: MatchContract.AdminStoragePath) {
+    if let matchAdmin = self.signer.borrow<&MatchContract.Admin>(from: MatchContract.AdminStoragePath) {
       matchAdmin.setActivateRegistration(true)
-      MatchContract.register(host: self.signer)
+      MatchContract.register(host: self.signer.address)
       matchAdmin.setActivateRegistration(false)
-      MatchContract.register(host: self.signer)
-      self.signer.save(<- matchAdmin, to: MatchContract.AdminStoragePath)
+      MatchContract.register(host: self.signer.address)
     } else {
       panic("not admin")
     }
