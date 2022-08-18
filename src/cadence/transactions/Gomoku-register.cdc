@@ -36,7 +36,7 @@ transaction(openingBet: UFix64) {
         if self.host.borrow<&Gomoku.CompositionCollection>(from: Gomoku.CollectionStoragePath) == nil {
             self.host.save(
                 <- Gomoku.createEmptyVault(),
-                to: GomokuIdentity.CollectionStoragePath
+                to: Gomoku.CollectionStoragePath
             )
             self.host.link<&Gomoku.CompositionCollection>(
                 Gomoku.CollectionPublicPath,

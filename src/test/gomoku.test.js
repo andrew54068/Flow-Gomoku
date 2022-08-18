@@ -46,16 +46,48 @@ describe("Gomoku", () => {
     return emulator.stop();
   })
 
-  test("register", async () => {
+  test("register without flow", async () => {
 
     const alice = await getAccountAddress("Alice")
     const args = [0]
     const signers = [alice]
 
-    const [txResult, error] = await shallPass(
+    const [txResult, error] = await shallRevert(
       sendTransaction('Gomoku-register', signers, args)
     )
     console.log(txResult, error)
 
   })
+
+  test("register with enough flow", async () => {
+
+    const alice = await getAccountAddress("Alice")
+
+    const serviceAccount = ['0xf8d6e0586b0a20c7']
+    const mintArgs = [alice, 5]
+
+    const [mintResult, mintError] = await shallPass(
+      sendTransaction('Mint-flow', serviceAccount, mintArgs)
+    )
+    expect(mintError).toBeNull()
+    console.log(mintResult)
+
+    const args = []
+    const signers = [alice]
+
+    const [txResult, error] = await shallPass(
+      sendTransaction('TestMatcher-admin-active-register', signers, args)
+    )
+    console.log(txResult, error)
+
+    const args1 = [3]
+    const signers1 = [alice]
+
+    const [txResult1, error1] = await shallPass(
+      sendTransaction('Gomoku-register', signers1, args1)
+    )
+    console.log(txResult1, error1)
+
+  })
+
 })

@@ -1120,9 +1120,6 @@ pub contract Gomoku {
             boardSize: boardSize,
             totalRound: totalRound
         )
-        emit CompositionCreated(
-            host: host,
-            currency: Type<FlowToken>().identifier)
 
         return <- Composition
     }
