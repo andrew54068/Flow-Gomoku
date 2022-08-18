@@ -32,26 +32,29 @@ describe("Deploy Contracts", () => {
   })
 
   test("Depoly Gomoku", async () => {
-    await deployMatcher()
+
     const to = await getAccountAddress("Alice")
 
-    // We assume there is a file on "../cadence/contracts/MatchContract.cdc" path
     const names = [
-      "FungibleToken",
-      "NonFungibleToken",
-      "TeleportedTetherToken",
-      "BloctoToken"
+      'MatchContract',
+      'GomokuType',
+      'GomokuResulting',
+      'GomokuResult',
+      'GomokuIdentifying',
+      'GomokuIdentity',
+      'Gomokuing'
     ]
 
     for (const name of names) {
       const [deploymentResult, error] = await deployContractByName({ to, name })
-      expectContractDeployed(deploymentResult)
+      expect(error).toBeNull()
+      expectContractDeployed(deploymentResult, name)
     }
 
     // We assume there is a file on "../cadence/contracts/Gomoku.cdc" path
     const name = "Gomoku"
     const [deploymentResult, error] = await deployContractByName({ to, name })
     expect(error).toBeNull()
-    expectContractDeployed(deploymentResult)
+    expectContractDeployed(deploymentResult, name)
   })
 })

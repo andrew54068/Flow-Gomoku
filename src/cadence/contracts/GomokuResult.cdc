@@ -145,7 +145,7 @@ pub contract GomokuResult: GomokuResulting {
         }
     }
 
-    access(account) fun createEmptyVault(): @AnyResource{GomokuResulting.ResultCollecting} {
+    pub fun createEmptyVault(): @AnyResource{GomokuResulting.ResultCollecting} {
         emit CollectionCreated()
         return <- create ResultCollection()
     }

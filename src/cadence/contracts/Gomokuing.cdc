@@ -40,7 +40,7 @@ pub contract interface Gomokuing {
         totalRound: UInt8
     ): @AnyResource{Compositioning}
 
-    access(account) fun createEmptyVault(): @AnyResource{CompositionCollecting}
+    pub fun createEmptyVault(): @AnyResource{CompositionCollecting}
 
     pub resource interface Compositioning {
         pub let id: UInt32

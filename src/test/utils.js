@@ -3,7 +3,7 @@ import {
   deployContractByName
 } from "@onflow/flow-js-testing";
 
-export const expectContractDeployed = (deploymentResult) => {
+export const expectContractDeployed = (deploymentResult, name) => {
   expect(deploymentResult.statusString).toBe('SEALED')
   let event = deploymentResult.events.filter(value => value.type == 'flow.AccountContractAdded')
   expect(event.length).toBe(1)
@@ -20,7 +20,7 @@ export const deployMatcher = async () => {
   expect(deploymentResult.statusString).toBe('SEALED')
   let event = deploymentResult.events.filter(value => value.type == 'flow.AccountContractAdded')
   expect(event.length).toBe(1)
-  expectContractDeployed(deploymentResult)
+  expectContractDeployed(deploymentResult, name)
 }
 
 export const deployGomokuType = async () => {
@@ -34,7 +34,7 @@ export const deployGomokuType = async () => {
   expect(deploymentResult.statusString).toBe('SEALED')
   let event = deploymentResult.events.filter(value => value.type == 'flow.AccountContractAdded')
   expect(event.length).toBe(1)
-  expectContractDeployed(deploymentResult)
+  expectContractDeployed(deploymentResult, name)
 }
 
 export const deployContract = async (name) => {
@@ -45,5 +45,5 @@ export const deployContract = async (name) => {
   expect(deploymentResult.statusString).toBe('SEALED')
   let event = deploymentResult.events.filter(value => value.type == 'flow.AccountContractAdded')
   expect(event.length).toBe(1)
-  expectContractDeployed(deploymentResult)
+  expectContractDeployed(deploymentResult, name)
 }

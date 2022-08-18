@@ -134,8 +134,9 @@ pub contract GomokuIdentity: GomokuIdentifying {
         }
     }
 
-    access(account) fun createEmptyVault(): @IdentityCollection {
+    pub fun createEmptyVault(): @IdentityCollection {
         emit CollectionCreated()
         return <- create IdentityCollection()
     }
 }
+ 

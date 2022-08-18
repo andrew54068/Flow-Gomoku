@@ -1180,7 +1180,7 @@ pub contract Gomoku {
         }
     }
 
-    access(account) fun createEmptyVault(): @Gomoku.CompositionCollection {
+    pub fun createEmptyVault(): @Gomoku.CompositionCollection {
         emit CollectionCreated()
         return <- create CompositionCollection()
     }
