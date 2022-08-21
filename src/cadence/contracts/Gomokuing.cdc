@@ -14,8 +14,8 @@ pub contract interface Gomokuing {
     // Scripts
     pub fun getCompositionRef(by index: UInt32): &AnyResource{Compositioning}?
     pub fun getParticipants(by index: UInt32): [Address]
-    pub fun getOpeningBet(by index: UInt32): UFix64
-    pub fun getValidBets(by index: UInt32): UFix64
+    pub fun getOpeningBet(by index: UInt32): UFix64?
+    pub fun getValidBets(by index: UInt32): UFix64?
 
     // Transaction
     pub fun register(

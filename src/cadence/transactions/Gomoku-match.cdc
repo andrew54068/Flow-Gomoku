@@ -4,68 +4,67 @@ import FlowToken from "../contracts/FlowToken.cdc"
 import FungibleToken from "../contracts/FungibleToken.cdc"
 import GomokuIdentity from "../contracts/GomokuIdentity.cdc"
 
-transaction() {
+transaction(budget: UFix64) {
     let challenger: AuthAccount
+    let flowTokenVault: &FlowToken.Vault
 
     prepare(challenger: AuthAccount) {
         self.challenger = challenger
+        self.flowTokenVault = self.challenger.borrow<&FlowToken.Vault>(
+            from: /storage/flowTokenVault) 
+            ?? panic("Could not borrow a reference to Vault")
+    }
+
+    pre {
+        self.flowTokenVault.balance >= budget: "Flow token not enough."
     }
 
     execute {
 
-        fun match(): Bool {
-            let waitingIndex = MatchContract.getRandomWaitingIndex() ?? panic("Waiting index not found.")
+        let waitingIndex = MatchContract.getRandomWaitingIndex() ?? panic("Waiting index not found.")
 
-            let openingBet = Gomoku.getOpeningBet(by: waitingIndex)
+        var index = waitingIndex
 
-            let vault: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
-
-            let flowTokenVault = self.challenger.borrow<&FlowToken.Vault>(
-                from: /storage/flowTokenVault) 
-                ?? panic("Could not borrow a reference to Vault")
-            vault.deposit(from: <- flowTokenVault.withdraw(amount: openingBet))
-
-            let recycleBetReceiverRef = self.challenger
-                .getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)
-                .borrow() ?? panic("Could not borrow a reference to the challenger recycle bet red.")
-
-            if self.challenger
-                .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
-                .borrow() == nil {
-                self.challenger.save(
-                    <- GomokuIdentity.createEmptyVault(),
-                    to: GomokuIdentity.CollectionStoragePath)
-                self.challenger.link<&GomokuIdentity.IdentityCollection>(
-                    GomokuIdentity.CollectionPublicPath,
-                    target: GomokuIdentity.CollectionStoragePath)
+        while (Gomoku.getOpeningBet(by: index) ?? UFix64(0)) > budget 
+            || Gomoku.getParticipants(by: index).length != 1 {
+            if Gomoku.getParticipants(by: index).length == 0 {
+                panic("Match failed.")
             }
-
-            let identityCollectionRef = self.challenger
-                .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
-                .borrow() ?? panic("Could not borrow a reference to the challenger identity collection ref.") 
-
-            let matched = Gomoku.matchOpponent(
-                index: waitingIndex,
-                challenger: self.challenger.address,
-                bet: <- vault,
-                recycleBetVaultRef: recycleBetReceiverRef,
-                identityCollectionRef: identityCollectionRef)
-            return matched
+            index = index + 1
         }
 
-        let firstMatched = match()
+        let openingBet = Gomoku.getOpeningBet(by: index) ?? UFix64(0)
 
-        if firstMatched == false {
-            // match again
-            let secondMatched = match()
-            if secondMatched {
-                let collection: @GomokuIdentity.IdentityCollection <- GomokuIdentity.createEmptyVault()
-                self.challenger.save(<- collection, to: GomokuIdentity.CollectionStoragePath)
+        let vault: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
 
-                self.challenger.link<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath, target: GomokuIdentity.CollectionStoragePath)
-            } else {
-                panic("matched failed")
-            }
+        vault.deposit(from: <- self.flowTokenVault.withdraw(amount: openingBet))
+
+        let recycleBetReceiverRef = self.challenger
+            .getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+            .borrow() ?? panic("Could not borrow a reference to the challenger recycle bet red.")
+
+        if self.challenger
+            .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
+            .borrow() == nil {
+            self.challenger.save(
+                <- GomokuIdentity.createEmptyVault(),
+                to: GomokuIdentity.CollectionStoragePath)
+            self.challenger.link<&GomokuIdentity.IdentityCollection>(
+                GomokuIdentity.CollectionPublicPath,
+                target: GomokuIdentity.CollectionStoragePath)
         }
+
+        let identityCollectionRef = self.challenger
+            .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
+            .borrow() ?? panic("Could not borrow a reference to the challenger identity collection ref.") 
+
+        let matched = Gomoku.matchOpponent(
+            index: index,
+            challenger: self.challenger.address,
+            bet: <- vault,
+            recycleBetVaultRef: recycleBetReceiverRef,
+            identityCollectionRef: identityCollectionRef)
+        assert(matched, message: "Match failed! Raise your budget or open one your own.")
+        return
     }
 }   

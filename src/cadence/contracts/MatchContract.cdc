@@ -21,6 +21,18 @@ pub contract MatchContract {
     access(account) let addressGroupMap: { String: { MatchStatus: [UInt32] } }
     access(account) let indexAddressMap: { UInt32: { MatchRole: Address } }
 
+    // Events
+    pub event registered(
+        host: Address,
+        index: UInt32
+    )
+    
+    pub event matched(
+        host: Address,
+        challenger: Address,
+        index: UInt32
+    )
+
     pub resource Admin {
         pub fun setActivateRegistration(_ active: Bool) {
             MatchContract.registerActive = active
@@ -138,6 +150,12 @@ pub contract MatchContract {
         } else {
             self.nextIndex = currentIndex + 1
         }
+
+        emit registered(
+            host: host,
+            index: currentIndex
+        )
+
         return currentIndex
     }
 
@@ -186,6 +204,13 @@ pub contract MatchContract {
                 self.matchedIndices.append(matchedIndex)
                 assert(self.waitingIndices.contains(matchIndex) == false, message: "WaitingIndices should not include ".concat(matchIndex.toString()).concat(" after matched."))
                 assert(self.matchedIndices.contains(matchIndex), message: "MatchedIndices should include ".concat(matchIndex.toString()).concat(" after matched."))
+
+                emit matched(
+                    host: hostAddress,
+                    challenger: challengerAddress,
+                    index: index
+                )
+        
                 return hostAddress
             } else {
                 panic("MatchIndex ".concat(matchIndex.toString()).concat(" should be found in waitingIndices"))

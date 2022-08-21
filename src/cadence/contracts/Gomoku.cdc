@@ -102,22 +102,31 @@ pub contract Gomoku {
     }
 
     // Opening bets
-    pub fun getOpeningBet(by index: UInt32): UFix64 {
-        let hostBet = self.hostOpeningBetMap[index]?.balance ?? UFix64(0)
-        let challengerBet = self.challengerOpeningBetMap[index]?.balance ?? UFix64(0)
-        return hostBet + challengerBet
+    pub fun getOpeningBet(by index: UInt32): UFix64? {
+        let hostBet = self.hostOpeningBetMap[index]?.balance
+        if hostBet == nil {
+            return nil
+        }
+        let challengerBet = self.challengerOpeningBetMap[index]?.balance
+        if challengerBet == nil {
+            return hostBet!
+        }
+        return hostBet! + challengerBet!
     }
 
     // Opening bets + raised bets
-    pub fun getValidBets(by index: UInt32): UFix64 {
-        let bet = self.getOpeningBet(by: index)
-        let hostRaisedBet = self.hostRaisedBetMap[index]?.balance ?? UFix64(0)
-        let challengerRaisedBet = self.challengerRaisedBetMap[index]?.balance ?? UFix64(0)
-        if hostRaisedBet >= challengerRaisedBet {
-            return bet + (challengerRaisedBet * UFix64(2))
-        } else {
-            return bet + (hostRaisedBet * UFix64(2))
+    pub fun getValidBets(by index: UInt32): UFix64? {
+        let openingBet = self.getOpeningBet(by: index)
+        if let bet = openingBet {
+            let hostRaisedBet = self.hostRaisedBetMap[index]?.balance ?? UFix64(0)
+            let challengerRaisedBet = self.challengerRaisedBetMap[index]?.balance ?? UFix64(0)
+            if hostRaisedBet >= challengerRaisedBet {
+                return bet + (challengerRaisedBet * UFix64(2))
+            } else {
+                return bet + (hostRaisedBet * UFix64(2))
+            }
         }
+        return nil
     }
 
     // Transaction
@@ -193,7 +202,7 @@ pub contract Gomoku {
                         host: matchedHost,
                         challenger: challenger,
                         currency: Type<FlowToken>().identifier,
-                        openingBet: self.getOpeningBet(by: index))
+                        openingBet: self.getOpeningBet(by: index) ?? UFix64(0))
                     return true
                 } else {
                     recycleBetVaultRef.deposit(from: <- bet)
