@@ -29,6 +29,17 @@ transaction() {
                 .getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)
                 .borrow() ?? panic("Could not borrow a reference to the challenger recycle bet red.")
 
+            if self.challenger
+                .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
+                .borrow() == nil {
+                self.challenger.save(
+                    <- GomokuIdentity.createEmptyVault(),
+                    to: GomokuIdentity.CollectionStoragePath)
+                self.challenger.link<&GomokuIdentity.IdentityCollection>(
+                    GomokuIdentity.CollectionPublicPath,
+                    target: GomokuIdentity.CollectionStoragePath)
+            }
+
             let identityCollectionRef = self.challenger
                 .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
                 .borrow() ?? panic("Could not borrow a reference to the challenger identity collection ref.") 
@@ -44,12 +55,7 @@ transaction() {
 
         let firstMatched = match()
 
-        if firstMatched {
-            let collection: @GomokuIdentity.IdentityCollection <- GomokuIdentity.createEmptyVault()
-            self.challenger.save(<- collection, to: GomokuIdentity.CollectionStoragePath)
-
-            self.challenger.link<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath, target: GomokuIdentity.CollectionStoragePath)
-        } else {
+        if firstMatched == false {
             // match again
             let secondMatched = match()
             if secondMatched {
