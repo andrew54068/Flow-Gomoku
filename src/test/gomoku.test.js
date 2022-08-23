@@ -154,10 +154,12 @@ describe("Gomoku", () => {
     expect(error1).toContain(`self.matchActive: \"Matching is not active.\"`)
   })
 
-  test("match without flow with match enable", async () => {
+  test("match with match enable", async () => {
 
     await registerWithFlow(3)
     await registerWithFlow(1)
+
+    const admin = await getAccountAddress(adminAddress)
 
     const bob = await getAccountAddress("Bob")
 
@@ -165,9 +167,33 @@ describe("Gomoku", () => {
 
     await matching(bob, 2)
 
+    const [scriptResult, scriptError] = await executeScript('Gomoku-get-composition-ref', [1])
+    expect(scriptError).toBeNull()
+    expect(scriptResult["host"]).toBe(admin)
+    expect(scriptResult["challenger"]).toBe(bob)
+    expect(scriptResult["currentRound"]).toBe(0)
+    expect(scriptResult["id"]).toBe(1)
+    expect(Object.keys(scriptResult["locationStoneMap"]).length).toBe(0)
+    expect(scriptResult["roundWiners"]).toEqual([])
+    expect(scriptResult["steps"]).toEqual([])
+    expect(scriptResult["totalRound"]).toBe(2)
+    expect(scriptResult["winner"]).toBeNull()
+
+    const [scriptResult2, scriptError2] = await executeScript('Gomoku-get-participants', [1])
+    expect(scriptError2).toBeNull()
+    expect(scriptResult2).toEqual([admin, bob])
+
+    const [scriptResult3, scriptError3] = await executeScript('Gomoku-get-opening-bet', [1])
+    expect(scriptError3).toBeNull()
+    expect(scriptResult3).toBe("2.00000000")
+
+    const [scriptResult4, scriptError4] = await executeScript('Gomoku-get-valid-bets', [1])
+    expect(scriptError4).toBeNull()
+    expect(scriptResult4).toBe("2.00000000")
+
   })
 
-  test("match without flow with match enable budget not enough", async () => {
+  test("match with match enable budget not enough", async () => {
 
     await registerWithFlow(3)
     await registerWithFlow(1)
