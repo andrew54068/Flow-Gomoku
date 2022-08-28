@@ -60,8 +60,7 @@ pub contract interface Gomokuing {
         pub fun makeMove(
             identityToken: @AnyResource{GomokuIdentifying.IdentityTokening},
             stone: @AnyResource{GomokuType.Stoning},
-            raisedBet: @FlowToken.Vault,
-            hasRoundWinnerCallback: ((Bool): Void)
+            raisedBet: @FlowToken.Vault
         ): @AnyResource{GomokuIdentifying.IdentityTokening}?
         pub fun surrender(
             identityToken: @AnyResource{GomokuIdentifying.IdentityTokening}

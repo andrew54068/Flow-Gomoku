@@ -48,7 +48,7 @@ pub contract GomokuType {
         pub let x: Int8
         pub let y: Int8
 
-        init(x: Int8, y: Int8) {
+        pub init(x: Int8, y: Int8) {
             self.x = x
             self.y = y
         }

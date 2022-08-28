@@ -59,7 +59,7 @@ describe("Gomoku", () => {
     console.log(mintResult)
   }
 
-  const registerWithFlow = async (bet) => {
+  const registerWithFlowByAdmin = async (bet) => {
     const admin = await getAccountAddress(adminAddress)
 
     await serviceAccountMintTo(admin, 5)
@@ -117,14 +117,14 @@ describe("Gomoku", () => {
 
   test("register with enough flow", async () => {
 
-    await registerWithFlow(3)
+    await registerWithFlowByAdmin(3)
 
   })
 
   test("match without flow", async () => {
 
-    await registerWithFlow(3)
-    await registerWithFlow(1)
+    await registerWithFlowByAdmin(3)
+    await registerWithFlowByAdmin(1)
 
     const bob = await getAccountAddress("Bob")
 
@@ -138,8 +138,8 @@ describe("Gomoku", () => {
 
   test("match with matching not enable", async () => {
 
-    await registerWithFlow(3)
-    await registerWithFlow(1)
+    await registerWithFlowByAdmin(3)
+    await registerWithFlowByAdmin(1)
 
     const bob = await getAccountAddress("Bob")
 
@@ -154,21 +154,20 @@ describe("Gomoku", () => {
     expect(error1).toContain(`self.matchActive: \"Matching is not active.\"`)
   })
 
-  test("match with match enable", async () => {
-
-    await registerWithFlow(3)
-    await registerWithFlow(1)
+  const matchGomoku = async (bet) => {
+    await registerWithFlowByAdmin(bet)
 
     const admin = await getAccountAddress(adminAddress)
 
     const bob = await getAccountAddress("Bob")
 
-    await serviceAccountMintTo(bob, 2)
+    await serviceAccountMintTo(bob, bet)
 
-    await matching(bob, 2)
+    await matching(bob, bet)
 
     const [scriptResult, scriptError] = await executeScript('Gomoku-get-composition-ref', [1])
     expect(scriptError).toBeNull()
+    console.log(scriptResult)
     expect(scriptResult["host"]).toBe(admin)
     expect(scriptResult["challenger"]).toBe(bob)
     expect(scriptResult["currentRound"]).toBe(0)
@@ -185,18 +184,24 @@ describe("Gomoku", () => {
 
     const [scriptResult3, scriptError3] = await executeScript('Gomoku-get-opening-bet', [1])
     expect(scriptError3).toBeNull()
-    expect(scriptResult3).toBe("2.00000000")
+    expect(scriptResult3).toBe(`${bet * 2}.00000000`)
 
     const [scriptResult4, scriptError4] = await executeScript('Gomoku-get-valid-bets', [1])
     expect(scriptError4).toBeNull()
-    expect(scriptResult4).toBe("2.00000000")
+    expect(scriptResult4).toBe(`${bet * 2}.00000000`)
+  }
 
+  test("match with match enable", async () => {
+
+    await registerWithFlowByAdmin(3)
+    
+    await matchGomoku(2)
   })
 
   test("match with match enable budget not enough", async () => {
 
-    await registerWithFlow(3)
-    await registerWithFlow(1)
+    await registerWithFlowByAdmin(3)
+    await registerWithFlowByAdmin(1)
 
     const bob = await getAccountAddress("Bob")
 
@@ -219,6 +224,25 @@ describe("Gomoku", () => {
     )
     console.log(txResult1, error1)
     expect(error1).toContain(`self.flowTokenVault.balance >= budget: \"Flow token not enough.\"`)
+  })
+
+  test("make first move", async () => {
+
+    await registerWithFlowByAdmin(3)
+    
+    await matchGomoku(2)
+
+    // const admin = await getAccountAddress(adminAddress)
+    const bob = await getAccountAddress("Bob")
+
+    const args = [1, 7, 7, 0]
+    const signers = [bob]
+
+    const [txResult, error] = await shallPass(
+      sendTransaction('Gomoku-make-move', signers, args)
+    )
+    expect(error).toBeNull()
+    console.log(txResult, error)
   })
 
 })

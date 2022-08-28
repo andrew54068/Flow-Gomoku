@@ -1,7 +1,7 @@
 import GomokuIdentifying from "./GomokuIdentifying.cdc"
 import GomokuType from "./GomokuType.cdc"
 
-pub contract GomokuIdentity: GomokuIdentifying {
+pub contract GomokuIdentity {
 
     // Paths
     pub let CollectionStoragePath: StoragePath
@@ -18,7 +18,7 @@ pub contract GomokuIdentity: GomokuIdentifying {
         self.CollectionPublicPath = /public/gomokuIdentityCollection
     }
 
-    pub resource IdentityToken: GomokuIdentifying.IdentityTokening {
+    pub resource IdentityToken {
         pub let id: UInt32
         pub let address: Address
         pub let role: GomokuType.Role
@@ -64,7 +64,7 @@ pub contract GomokuIdentity: GomokuIdentifying {
         address: Address,
         role: GomokuType.Role,
         stoneColor: GomokuType.StoneColor
-    ): @AnyResource{GomokuIdentifying.IdentityTokening} {
+    ): @IdentityToken {
         emit Create(
             id: id, 
             address: address, 
@@ -78,12 +78,12 @@ pub contract GomokuIdentity: GomokuIdentifying {
         )
     }
 
-    pub resource IdentityCollection: GomokuIdentifying.IdentityCollecting {
+    pub resource IdentityCollection {
 
         pub let StoragePath: StoragePath
         pub let PublicPath: PublicPath
 
-        priv var ownedIdentityTokenMap: @{UInt32: AnyResource{GomokuIdentifying.IdentityTokening}}
+        priv var ownedIdentityTokenMap: @{UInt32: IdentityToken}
         priv var destroyable: Bool
 
         init () {
@@ -93,7 +93,7 @@ pub contract GomokuIdentity: GomokuIdentifying {
             self.PublicPath = /public/compositionIdentity
         }
 
-        access(account) fun withdraw(by id: UInt32): @AnyResource{GomokuIdentifying.IdentityTokening}? {
+        access(account) fun withdraw(by id: UInt32): @IdentityToken? {
             if let token <- self.ownedIdentityTokenMap.remove(key: id) {
                 emit Withdraw(id: token.id, from: self.owner?.address)
                 if self.ownedIdentityTokenMap.keys.length == 0 {
@@ -105,7 +105,7 @@ pub contract GomokuIdentity: GomokuIdentifying {
             }
         }
 
-        access(account) fun deposit(token: @AnyResource{GomokuIdentifying.IdentityTokening}) {
+        access(account) fun deposit(token: @IdentityToken) {
             let token <- token
             let id: UInt32 = token.id
             let oldToken <- self.ownedIdentityTokenMap[id] <- token
@@ -122,8 +122,8 @@ pub contract GomokuIdentity: GomokuIdentifying {
             return self.ownedIdentityTokenMap.keys.length
         }
 
-        pub fun borrow(id: UInt32): &AnyResource{GomokuIdentifying.IdentityTokening}? {
-            return &self.ownedIdentityTokenMap[id] as &AnyResource{GomokuIdentifying.IdentityTokening}?
+        pub fun borrow(id: UInt32): &IdentityToken? {
+            return &self.ownedIdentityTokenMap[id] as? &IdentityToken?
         }
 
         destroy() {

@@ -348,17 +348,23 @@ pub contract Gomoku {
 
         // Transaction
         pub fun makeMove(
-            identityToken: @GomokuIdentity.IdentityToken,
-            stone: @Stone,
+            identityCollectionRef: &GomokuIdentity.IdentityCollection,
+            location: GomokuType.StoneLocation,
             raisedBet: @FlowToken.Vault
-        ): @GomokuIdentity.IdentityToken? {
+        ) {
+
             // check identity
-            pre {
-                identityToken.stoneColor == stone.color: "You are not suppose to make this move."
-                identityToken.id == self.id: "You are not authorized to make this move."
-                identityToken.owner?.address == identityToken.address: "Identity token should not be transfer to other."
-                Int(self.currentRound) + 1 > self.roundWiners.length: "Game Over."
-            }
+            let identityTokenRef = identityCollectionRef.borrow(id: self.id) as &GomokuIdentity.IdentityToken?
+            assert(identityTokenRef != nil, message: "Identity token ref not found.")
+            assert(identityTokenRef?.owner?.address == identityTokenRef?.address, message: "Identity token should not be transfer to other.")
+
+            let identityToken <- identityCollectionRef.withdraw(by: self.id) ?? panic("You are not suppose to make this move.")
+            assert(Int(self.currentRound) + 1 > self.roundWiners.length, message: "Game Over.")
+
+            let stone <- create Stone(
+                color: identityToken.stoneColor,
+                location: location
+            )
 
             // check raise bet type
             assert(
@@ -367,22 +373,20 @@ pub contract Gomoku {
                     .concat(raisedBet.getType().identifier)
             )
 
-            let lastRole = self.getRole()
-            var currentRole = GomokuType.Role.host
-            switch lastRole {
-            case GomokuType.Role.host:
-                currentRole = GomokuType.Role.challenger
-                assert(self.challenger != nil, message: "Challenger not found.")
-                assert(identityToken.address == self.challenger!, message: "It's not you turn yet!")
-            case GomokuType.Role.challenger:
-                currentRole = GomokuType.Role.host
-                assert(identityToken.address == self.host, message: "It's not you turn yet!")
-            default:
-                panic("Should not be the case.")
-            }
+            let currentRole = self.getRole()
+            // var currentRole = GomokuType.Role.host
+            // switch currentRole {
+            // case GomokuType.Role.host:
+            //     // currentRole = GomokuType.Role.challenger
+            // case GomokuType.Role.challenger:
+            //     // currentRole = GomokuType.Role.host
+            // default:
+            //     panic("Should not be the case.")
+            // }
 
             switch currentRole {
             case GomokuType.Role.host:
+                assert(identityToken.address == self.host, message: "It's not you turn yet!")
                 var emptyBet: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
                 var hostRaisedBet <- Gomoku.hostRaisedBetMap[self.id] <- emptyBet
                 if let oldBet <- hostRaisedBet {
@@ -395,6 +399,8 @@ pub contract Gomoku {
                     destroy hostRaisedBet
                 }
             case GomokuType.Role.challenger:
+                assert(self.challenger != nil, message: "Challenger not found.")
+                assert(identityToken.address == self.challenger!, message: "It's not you turn yet!")
                 var emptyBet: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
                 var hostRaisedBet <- Gomoku.challengerRaisedBetMap[self.id] <- emptyBet
                 if let oldBet <- hostRaisedBet {
@@ -435,10 +441,10 @@ pub contract Gomoku {
                 } else {
                     // end of game
                     self.finalize(identityToken: <- identityToken)
-                    return nil
+                    return
                 }
             }
-            return <- identityToken
+            identityCollectionRef.deposit(token: <- identityToken)
         }
 
         pub fun surrender(
@@ -869,8 +875,11 @@ pub contract Gomoku {
 
         priv fun verifyAndStoreStone(stone: @Stone) {
             pre {
-                self.steps.length == 2: "Steps length should be 2."
-                self.currentRound <= 1: "Composition only has 2 round each."
+                // self.steps.length == 2: "Steps length should be 2."
+                Int(self.currentRound) <= 1: "Composition only has 2 round each."
+            }
+            if self.steps.length < Int(self.currentRound) + 1 {
+                self.steps.append(<- [])
             }
             let roundSteps = &self.steps[self.currentRound] as &[AnyResource{GomokuType.Stoning}]
 
@@ -1208,7 +1217,7 @@ pub contract Gomoku {
         pub let color: GomokuType.StoneColor
         pub let location: GomokuType.StoneLocation
 
-        init(
+        pub init(
             color: GomokuType.StoneColor,
             location: GomokuType.StoneLocation
         ) {
