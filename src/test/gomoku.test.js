@@ -103,56 +103,56 @@ describe("Gomoku", () => {
     console.log(txResult1, error1)
   }
 
-  test("register without flow", async () => {
+  // test("register without flow", async () => {
 
-    const alice = await getAccountAddress(adminAddress)
-    const args = [0]
-    const signers = [alice]
+  //   const alice = await getAccountAddress(adminAddress)
+  //   const args = [0]
+  //   const signers = [alice]
 
-    const [txResult, error] = await shallRevert(
-      sendTransaction('Gomoku-register', signers, args)
-    )
-    expect(error).toContain(`assert(self.host.availableBalance > openingBet, message: \"Flow token is insufficient.\")`)
-  })
+  //   const [txResult, error] = await shallRevert(
+  //     sendTransaction('Gomoku-register', signers, args)
+  //   )
+  //   expect(error).toContain(`assert(self.host.availableBalance > openingBet, message: \"Flow token is insufficient.\")`)
+  // })
 
-  test("register with enough flow", async () => {
+  // test("register with enough flow", async () => {
 
-    await registerWithFlowByAdmin(3)
+  //   await registerWithFlowByAdmin(3)
 
-  })
+  // })
 
-  test("match without flow", async () => {
+  // test("match without flow", async () => {
 
-    await registerWithFlowByAdmin(3)
-    await registerWithFlowByAdmin(1)
+  //   await registerWithFlowByAdmin(3)
+  //   await registerWithFlowByAdmin(1)
 
-    const bob = await getAccountAddress("Bob")
+  //   const bob = await getAccountAddress("Bob")
 
-    const signers1 = [bob]
+  //   const signers1 = [bob]
 
-    const [txResult1, error1] = await shallRevert(
-      sendTransaction('Gomoku-match', signers1, [0])
-    )
-    expect(error1).toContain(`panic(\"Match failed.\")`)
-  })
+  //   const [txResult1, error1] = await shallRevert(
+  //     sendTransaction('Gomoku-match', signers1, [0])
+  //   )
+  //   expect(error1).toContain(`panic(\"Match failed.\")`)
+  // })
 
-  test("match with matching not enable", async () => {
+  // test("match with matching not enable", async () => {
 
-    await registerWithFlowByAdmin(3)
-    await registerWithFlowByAdmin(1)
+  //   await registerWithFlowByAdmin(3)
+  //   await registerWithFlowByAdmin(1)
 
-    const bob = await getAccountAddress("Bob")
+  //   const bob = await getAccountAddress("Bob")
 
-    await serviceAccountMintTo(bob, 3)
+  //   await serviceAccountMintTo(bob, 3)
 
-    const signers1 = [bob]
+  //   const signers1 = [bob]
 
-    const [txResult1, error1] = await shallRevert(
-      sendTransaction('Gomoku-match', signers1, [3])
-    )
-    console.log(txResult1, error1)
-    expect(error1).toContain(`self.matchActive: \"Matching is not active.\"`)
-  })
+  //   const [txResult1, error1] = await shallRevert(
+  //     sendTransaction('Gomoku-match', signers1, [3])
+  //   )
+  //   console.log(txResult1, error1)
+  //   expect(error1).toContain(`self.matchActive: \"Matching is not active.\"`)
+  // })
 
   const matchGomoku = async (bet) => {
     await registerWithFlowByAdmin(bet)
@@ -191,40 +191,40 @@ describe("Gomoku", () => {
     expect(scriptResult4).toBe(`${bet * 2}.00000000`)
   }
 
-  test("match with match enable", async () => {
+  // test("match with match enable", async () => {
 
-    await registerWithFlowByAdmin(3)
+  //   await registerWithFlowByAdmin(3)
     
-    await matchGomoku(2)
-  })
+  //   await matchGomoku(2)
+  // })
 
-  test("match with match enable budget not enough", async () => {
+  // test("match with match enable budget not enough", async () => {
 
-    await registerWithFlowByAdmin(3)
-    await registerWithFlowByAdmin(1)
+  //   await registerWithFlowByAdmin(3)
+  //   await registerWithFlowByAdmin(1)
 
-    const bob = await getAccountAddress("Bob")
+  //   const bob = await getAccountAddress("Bob")
 
-    await serviceAccountMintTo(bob, 2)
+  //   await serviceAccountMintTo(bob, 2)
 
-    const admin = await getAccountAddress(adminAddress)
-    const args = []
-    const signers = [admin]
+  //   const admin = await getAccountAddress(adminAddress)
+  //   const args = []
+  //   const signers = [admin]
 
-    const [txResult, error] = await shallPass(
-      sendTransaction('TestMatcher-admin-active-match', signers, args)
-    )
-    expect(error).toBeNull()
-    console.log(txResult, error)
+  //   const [txResult, error] = await shallPass(
+  //     sendTransaction('TestMatcher-admin-active-match', signers, args)
+  //   )
+  //   expect(error).toBeNull()
+  //   console.log(txResult, error)
 
-    const signers1 = [bob]
+  //   const signers1 = [bob]
 
-    const [txResult1, error1] = await shallRevert(
-      sendTransaction('Gomoku-match', signers1, [3])
-    )
-    console.log(txResult1, error1)
-    expect(error1).toContain(`self.flowTokenVault.balance >= budget: \"Flow token not enough.\"`)
-  })
+  //   const [txResult1, error1] = await shallRevert(
+  //     sendTransaction('Gomoku-match', signers1, [3])
+  //   )
+  //   console.log(txResult1, error1)
+  //   expect(error1).toContain(`self.flowTokenVault.balance >= budget: \"Flow token not enough.\"`)
+  // })
 
   test("make first move", async () => {
 
@@ -243,6 +243,24 @@ describe("Gomoku", () => {
     )
     expect(error).toBeNull()
     console.log(txResult, error)
+
+    const index = 1
+    const round = 0
+
+    const [scriptResult, scriptError] = await executeScript('Gomoku-get-stone-data', [index, round])
+    expect(scriptError).toBeNull()
+    console.log(scriptResult)
+    expect(scriptResult).toEqual([
+      {
+        color: {
+          rawValue: 0
+        },
+        location: {
+          x: 7,
+          y: 7
+        }
+      }
+    ])
   })
 
 })
