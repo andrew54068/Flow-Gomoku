@@ -295,7 +295,13 @@ pub contract Gomoku {
             self.currentRound = 0
             self.winner = nil
             self.roundWiners = []
+
             self.steps <- []
+            var stepIndex = UInt8(0)
+            while totalRound > stepIndex {
+                self.steps.append(<- [])
+                stepIndex = stepIndex + UInt8(1)
+            }
             self.locationStoneMap = {}
 
             self.latestBlockHeight = getCurrentBlock().height
@@ -316,7 +322,7 @@ pub contract Gomoku {
                 self.steps.length > Int(round): "Round ".concat(round.toString()).concat(" not exist.")
             }
             var placeholderArray: @[Stone] <- []
-            self.steps[self.currentRound] <-> placeholderArray
+            self.steps[round] <-> placeholderArray
             var placeholderStone <- create Stone(
                 color: GomokuType.StoneColor.black,
                 location: GomokuType.StoneLocation(x: 0, y: 0)
@@ -331,7 +337,7 @@ pub contract Gomoku {
                 index = index + 1
             }
 
-            self.steps[self.currentRound] <-> placeholderArray
+            self.steps[round] <-> placeholderArray
 
             destroy placeholderArray
             destroy placeholderStone
@@ -343,6 +349,14 @@ pub contract Gomoku {
                 return [self.host, challenger]
             } else {
                 return [self.host]
+            }
+        }
+
+        pub fun getRoundWinner(by index: UInt8): GomokuType.Role? {
+            if self.roundWiners.length > Int(index) {
+                return self.roundWiners[index]
+            } else {
+                return nil
             }
         }
 
@@ -374,15 +388,6 @@ pub contract Gomoku {
             )
 
             let currentRole = self.getRole()
-            // var currentRole = GomokuType.Role.host
-            // switch currentRole {
-            // case GomokuType.Role.host:
-            //     // currentRole = GomokuType.Role.challenger
-            // case GomokuType.Role.challenger:
-            //     // currentRole = GomokuType.Role.host
-            // default:
-            //     panic("Should not be the case.")
-            // }
 
             switch currentRole {
             case GomokuType.Role.host:
@@ -437,14 +442,15 @@ pub contract Gomoku {
                 // event
                 // end of current round
                 if self.currentRound + UInt8(1) < self.totalRound {
+                    identityCollectionRef.deposit(token: <- identityToken)
                     self.switchRound()
                 } else {
                     // end of game
                     self.finalize(identityToken: <- identityToken)
-                    return
                 }
+            } else {
+                identityCollectionRef.deposit(token: <- identityToken)
             }
-            identityCollectionRef.deposit(token: <- identityToken)
         }
 
         pub fun surrender(
@@ -500,8 +506,17 @@ pub contract Gomoku {
                 getCurrentBlock().height > self.getTimeout(): "Let's give opponent more time to think......"
             }
 
-            let lastRole = self.getRole()
-            self.roundWiners.append(lastRole)
+            let nextRole = self.getRole()
+            switch nextRole {
+            case GomokuType.Role.host:
+                self.roundWiners.append(GomokuType.Role.challenger)
+            case GomokuType.Role.challenger:
+                self.roundWiners.append(GomokuType.Role.host)
+            default:
+                panic("Should not be the case.")
+            }
+
+            // self.roundWiners.append(lastRole)
             if self.currentRound + UInt8(1) < self.totalRound {
                 self.switchRound()
                 return <- identityToken
@@ -820,9 +835,10 @@ pub contract Gomoku {
 
         // Challenger go first in first round
         priv fun getRole(): GomokuType.Role {
+            let roundSteps = &self.steps[self.currentRound] as &[Stone]
             if self.currentRound % 2 == 0 {
                 // first move is challenger if index is even
-                if self.steps.length % 2 == 0 {
+                if roundSteps.length % 2 == 0 {
                     // step for challenger
                     return GomokuType.Role.challenger
                 } else {
@@ -831,7 +847,7 @@ pub contract Gomoku {
                 }
             } else {
                 // first move is host if index is odd
-                if self.steps.length % 2 == 0 {
+                if roundSteps.length % 2 == 0 {
                     // step for host
                     return GomokuType.Role.host
                 } else {
@@ -848,7 +864,7 @@ pub contract Gomoku {
             }
             post {
                 self.currentRound == before(self.currentRound) + 1: "fatal error."
-                self.roundWiners[self.currentRound] == nil: "Should not have winner right after switching rounds."
+                self.roundWiners.length == Int(self.currentRound): "Should not have winner right after switching rounds."
             }
             self.currentRound = self.currentRound + 1
 
@@ -878,9 +894,9 @@ pub contract Gomoku {
                 // self.steps.length == 2: "Steps length should be 2."
                 Int(self.currentRound) <= 1: "Composition only has 2 round each."
             }
-            if self.steps.length < Int(self.currentRound) + 1 {
-                self.steps.append(<- [])
-            }
+            // if self.steps.length < Int(self.currentRound) + 1 {
+            //     self.steps.append(<- [])
+            // }
             let roundSteps = &self.steps[self.currentRound] as &[AnyResource{GomokuType.Stoning}]
 
             // check stone location is within board.
