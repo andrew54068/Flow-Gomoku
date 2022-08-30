@@ -252,7 +252,82 @@ describe("Gomoku", () => {
     expect(scriptResult).toEqual(expectStoneData)
   }
 
-  test("make first move", async () => {
+  const simulateMoves = async (compositionIndex, roundIndex, host, bobMoves, aliceMoves) => {
+    const alice = await getAccountAddress(adminAddress)
+    const bob = await getAccountAddress("Bob")
+    let firstTaker
+    let secondTaker
+    let firstTakerMoves = []
+    let secondTakerMoves = []
+    if (host == alice) {
+      if (roundIndex % 2 == 0) {
+        firstTaker = bob
+        secondTaker = alice
+        firstTakerMoves = bobMoves
+        secondTakerMoves = aliceMoves
+      } else {
+        firstTaker = alice
+        secondTaker = bob
+        firstTakerMoves = aliceMoves
+        secondTakerMoves = bobMoves
+      }
+    } else {
+      if (roundIndex % 2 == 0) {
+        firstTaker = alice
+        secondTaker = bob
+        firstTakerMoves = aliceMoves
+        secondTakerMoves = bobMoves
+      } else {
+        firstTaker = bob
+        secondTaker = alice
+        firstTakerMoves = bobMoves
+        secondTakerMoves = aliceMoves
+      }
+    }
+    let moves = []
+    for (let step = 0; step < bobMoves.length; step++) {
+      const firstTakerMove = firstTakerMoves[step]
+      if (firstTakerMove) {
+        moves.push(
+          {
+            color: {
+              rawValue: StoneColor.black
+            },
+            location: {
+              x: firstTakerMove.x,
+              y: firstTakerMove.y
+            }
+          }
+        )
+        await makeMove(firstTaker, compositionIndex, roundIndex, {
+          color: StoneColor.black,
+          x: firstTakerMove.x,
+          y: firstTakerMove.y
+        }, 0, moves)
+      }
+      const secondTakerMove = secondTakerMoves[step] 
+      if (secondTakerMove) {
+        moves.push(
+          {
+            color: {
+              rawValue: StoneColor.white
+            },
+            location: {
+              x: secondTakerMove.x,
+              y: secondTakerMove.y
+            }
+          }
+        )
+        await makeMove(secondTaker, compositionIndex, roundIndex, {
+          color: StoneColor.white,
+          x: secondTakerMove.x,
+          y: secondTakerMove.y
+        }, 0, moves)
+      }
+    }
+  }
+
+  test("make moves", async () => {
 
     await registerWithFlowByAdmin(3)
     
@@ -262,153 +337,51 @@ describe("Gomoku", () => {
     const bob = await getAccountAddress("Bob")
 
     const compositionIndex = 1
-    const roundIndex = 0
-    let moves = []
+    let roundIndex = 0
 
-    const bobMove1 = {
-      color: {
-        rawValue: StoneColor.black
-      },
-      location: {
+    let bobMoves = [
+      {
         x: 7,
         y: 7
-      }
-    }
-    moves.push(bobMove1)
-    await makeMove(bob, compositionIndex, roundIndex, {
-      color: bobMove1.color.rawValue,
-      x: bobMove1.location.x,
-      y: bobMove1.location.y
-    }, 0, moves)
-
-    const aliceMove1 = {
-      color: {
-        rawValue: StoneColor.white
       },
-      location: {
-        x: 7,
-        y: 8
-      }
-    }
-    moves.push(aliceMove1)
-    await makeMove(alice, compositionIndex, roundIndex, {
-      color: aliceMove1.color.rawValue,
-      x: aliceMove1.location.x,
-      y: aliceMove1.location.y
-    }, 0, moves)
-
-    const bobMove2 = {
-      color: {
-        rawValue: StoneColor.black
-      },
-      location: {
+      {
         x: 8,
         y: 7
-      }
-    }
-    moves.push(bobMove2)
-    await makeMove(bob, compositionIndex, roundIndex, {
-      color: bobMove2.color.rawValue,
-      x: bobMove2.location.x,
-      y: bobMove2.location.y
-    }, 0, moves)
-
-    const aliceMove2 = {
-      color: {
-        rawValue: StoneColor.white
       },
-      location: {
-        x: 8,
-        y: 8
-      }
-    }
-    moves.push(aliceMove2)
-    await makeMove(alice, compositionIndex, roundIndex, {
-      color: aliceMove2.color.rawValue,
-      x: aliceMove2.location.x,
-      y: aliceMove2.location.y
-    }, 0, moves)
-
-    const bobMove3 = {
-      color: {
-        rawValue: StoneColor.black
-      },
-      location: {
+      {
         x: 9,
         y: 7
-      }
-    }
-    moves.push(bobMove3)
-    await makeMove(bob, compositionIndex, roundIndex, {
-      color: bobMove3.color.rawValue,
-      x: bobMove3.location.x,
-      y: bobMove3.location.y
-    }, 0, moves)
-
-    const aliceMove3 = {
-      color: {
-        rawValue: StoneColor.white
       },
-      location: {
-        x: 9,
-        y: 8
-      }
-    }
-    moves.push(aliceMove3)
-    await makeMove(alice, compositionIndex, roundIndex, {
-      color: aliceMove3.color.rawValue,
-      x: aliceMove3.location.x,
-      y: aliceMove3.location.y
-    }, 0, moves)
-
-    const bobMove4 = {
-      color: {
-        rawValue: StoneColor.black
-      },
-      location: {
+      {
         x: 10,
         y: 7
-      }
-    }
-    moves.push(bobMove4)
-    await makeMove(bob, compositionIndex, roundIndex, {
-      color: bobMove4.color.rawValue,
-      x: bobMove4.location.x,
-      y: bobMove4.location.y
-    }, 0, moves)
-
-    const aliceMove4 = {
-      color: {
-        rawValue: StoneColor.white
       },
-      location: {
-        x: 10,
-        y: 8
-      }
-    }
-    moves.push(aliceMove4)
-    await makeMove(alice, compositionIndex, roundIndex, {
-      color: aliceMove4.color.rawValue,
-      x: aliceMove4.location.x,
-      y: aliceMove4.location.y
-    }, 0, moves)
-
-    const bobMove5 = {
-      color: {
-        rawValue: StoneColor.black
-      },
-      location: {
+      {
         x: 11,
         y: 7
       }
-    }
-    moves.push(bobMove5)
-    await makeMove(bob, compositionIndex, roundIndex, {
-      color: bobMove5.color.rawValue,
-      x: bobMove5.location.x,
-      y: bobMove5.location.y
-    }, 0, moves)
+    ]
 
+    let aliceMoves = [
+      {
+        x: 7,
+        y: 8
+      },
+      {
+        x: 8,
+        y: 8
+      },
+      {
+        x: 9,
+        y: 8
+      },
+      {
+        x: 10,
+        y: 8
+      }
+    ]
+
+    await simulateMoves(compositionIndex, roundIndex, alice, bobMoves, aliceMoves)
 
     const [scriptResult, scriptError] = await executeScript('Gomoku-get-round-winner', [compositionIndex, roundIndex])
     expect(scriptError).toBeNull()
@@ -416,6 +389,64 @@ describe("Gomoku", () => {
     expect(scriptResult).toEqual({
       rawValue: Role.challenger
     })
+
+    roundIndex++
+
+    aliceMoves = [
+      {
+        x: 7,
+        y: 8
+      },
+      {
+        x: 8,
+        y: 8
+      },
+      {
+        x: 9,
+        y: 8
+      },
+      {
+        x: 10,
+        y: 8
+      },
+      {
+        x: 10,
+        y: 9
+      }
+    ]
+
+    bobMoves = [
+      {
+        x: 7,
+        y: 7
+      },
+      {
+        x: 8,
+        y: 7
+      },
+      {
+        x: 9,
+        y: 7
+      },
+      {
+        x: 10,
+        y: 7
+      },
+      {
+        x: 11,
+        y: 7
+      }
+    ]
+
+    await simulateMoves(compositionIndex, roundIndex, alice, bobMoves, aliceMoves)
+
+    const [scriptResult2, scriptError2] = await executeScript('Gomoku-get-round-winner', [compositionIndex, roundIndex])
+    expect(scriptError2).toBeNull()
+    console.log(scriptResult2)
+    expect(scriptResult2).toEqual({
+      rawValue: Role.challenger
+    })
+
   }, 5 * 60 * 1000)
 
 })
