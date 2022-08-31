@@ -274,7 +274,7 @@ pub contract Gomoku {
         priv var challenger: Address?
         priv var roundWiners: [GomokuType.Role]
         priv var steps: @[[Stone]]
-        priv var locationStoneMap: {String: GomokuType.StoneColor}
+        priv var locationStoneMaps: [{String: GomokuType.StoneColor}]
 
         init(
             id: UInt32,
@@ -297,12 +297,13 @@ pub contract Gomoku {
             self.roundWiners = []
 
             self.steps <- []
+            self.locationStoneMaps = []
             var stepIndex = UInt8(0)
             while totalRound > stepIndex {
                 self.steps.append(<- [])
+                self.locationStoneMaps.append({})
                 stepIndex = stepIndex + UInt8(1)
             }
-            self.locationStoneMap = {}
 
             self.latestBlockHeight = getCurrentBlock().height
             self.blockHeightTimeout = UInt64(60 * 60 * 24 * 7)
@@ -674,6 +675,7 @@ pub contract Gomoku {
                     .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
                     .borrow() {
                     if let hostIdentityToken <- identityCollectionRef.withdraw(by: identityTokenId) {
+                        hostIdentityToken.setDestroyable(true)
                         destroy hostIdentityToken
                     } else {
                         emit ResourceNotFound(
@@ -688,6 +690,7 @@ pub contract Gomoku {
                         address: self.host)
                 }
             }
+            identityToken.setDestroyable(true)
             destroy identityToken
 
             self.mintCompositionResults(
@@ -894,9 +897,6 @@ pub contract Gomoku {
                 // self.steps.length == 2: "Steps length should be 2."
                 Int(self.currentRound) <= 1: "Composition only has 2 round each."
             }
-            // if self.steps.length < Int(self.currentRound) + 1 {
-            //     self.steps.append(<- [])
-            // }
             let roundSteps = &self.steps[self.currentRound] as &[AnyResource{GomokuType.Stoning}]
 
             // check stone location is within board.
@@ -908,7 +908,7 @@ pub contract Gomoku {
                     .concat(" is invalid."))
 
             // check location not yet taken.
-            assert(self.locationStoneMap[stone.key()] == nil, message: "This place had been taken.")
+            assert(self.locationStoneMaps[self.currentRound][stone.key()] == nil, message: "This place had been taken.")
 
             if roundSteps.length % 2 == 0 {
                 // black stone move
@@ -920,7 +920,7 @@ pub contract Gomoku {
 
             let stoneColor = stone.color
             let stoneLocation = stone.location
-            self.locationStoneMap[stone.key()] = stoneColor
+            self.locationStoneMaps[self.currentRound][stone.key()] = stoneColor
             self.steps[self.currentRound].append(<- stone)
         }
 
@@ -976,7 +976,7 @@ pub contract Gomoku {
                         && shift <= Int8(4)
                         && center.x - shift >= Int8(0) {
                     let currentCheckedLocation = GomokuType.StoneLocation(x: center.x - shift, y: center.y)
-                    if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                    if let color = self.locationStoneMaps[self.currentRound][currentCheckedLocation.key()] {
                         if color == targetColor {
                             countInRow = countInRow + UInt8(1)
                         } else {
@@ -993,7 +993,7 @@ pub contract Gomoku {
                         && shift <= Int8(4)
                         && center.x + shift >= Int8(0) {
                     let currentCheckedLocation = GomokuType.StoneLocation(x: center.x + shift, y: center.y)
-                    if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                    if let color = self.locationStoneMaps[self.currentRound][currentCheckedLocation.key()] {
                         if color == targetColor {
                             countInRow = countInRow + UInt8(1)
                         } else {
@@ -1009,7 +1009,7 @@ pub contract Gomoku {
                         && shift <= Int8(4)
                         && center.y - shift >= Int8(0) {
                     let currentCheckedLocation = GomokuType.StoneLocation(x: center.x, y: center.y - shift)
-                    if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                    if let color = self.locationStoneMaps[self.currentRound][currentCheckedLocation.key()] {
                         if color == targetColor {
                             countInRow = countInRow + UInt8(1)
                         } else {
@@ -1026,7 +1026,7 @@ pub contract Gomoku {
                         && shift <= Int8(4)
                         && center.y + shift >= Int8(0) {
                     let currentCheckedLocation = GomokuType.StoneLocation(x: center.x, y: center.y + shift)
-                    if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                    if let color = self.locationStoneMaps[self.currentRound][currentCheckedLocation.key()] {
                         if color == targetColor {
                             countInRow = countInRow + UInt8(1)
                         } else {
@@ -1043,7 +1043,7 @@ pub contract Gomoku {
                         && center.x - shift >= Int8(0)
                         && center.y - shift >= Int8(0) {
                     let currentCheckedLocation = GomokuType.StoneLocation(x: center.x - shift, y: center.y - shift)
-                    if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                    if let color = self.locationStoneMaps[self.currentRound][currentCheckedLocation.key()] {
                         if color == targetColor {
                             countInRow = countInRow + UInt8(1)
                         } else {
@@ -1061,7 +1061,7 @@ pub contract Gomoku {
                         && center.x + shift >= Int8(0)
                         && center.y + shift >= Int8(0) {
                     let currentCheckedLocation = GomokuType.StoneLocation(x: center.x + shift, y: center.y + shift)
-                    if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                    if let color = self.locationStoneMaps[self.currentRound][currentCheckedLocation.key()] {
                         if color == targetColor {
                             countInRow = countInRow + UInt8(1)
                         } else {
@@ -1078,7 +1078,7 @@ pub contract Gomoku {
                         && center.x - shift >= Int8(0)
                         && center.y + shift >= Int8(0) {
                     let currentCheckedLocation = GomokuType.StoneLocation(x: center.x - shift, y: center.y + shift)
-                    if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                    if let color = self.locationStoneMaps[self.currentRound][currentCheckedLocation.key()] {
                         if color == targetColor {
                             countInRow = countInRow + UInt8(1)
                         } else {
@@ -1096,7 +1096,7 @@ pub contract Gomoku {
                         && center.x + shift >= Int8(0)
                         && center.y - shift >= Int8(0) {
                     let currentCheckedLocation = GomokuType.StoneLocation(x: center.x + shift, y: center.y - shift)
-                    if let color = self.locationStoneMap[currentCheckedLocation.key()] {
+                    if let color = self.locationStoneMaps[self.currentRound][currentCheckedLocation.key()] {
                         if color == targetColor {
                             countInRow = countInRow + UInt8(1)
                         } else {

@@ -172,7 +172,7 @@ describe("Gomoku", () => {
     expect(scriptResult["challenger"]).toBe(bob)
     expect(scriptResult["currentRound"]).toBe(0)
     expect(scriptResult["id"]).toBe(1)
-    expect(Object.keys(scriptResult["locationStoneMap"]).length).toBe(0)
+    expect(Object.keys(scriptResult["locationStoneMaps"]).length).toBe(2)
     expect(scriptResult["roundWiners"]).toEqual([])
     expect(scriptResult["steps"]).toEqual([[], []])
     expect(scriptResult["totalRound"]).toBe(2)
@@ -239,9 +239,10 @@ describe("Gomoku", () => {
   const makeMove = async (player, index, round, stone, raiseBet, expectStoneData) => {
     const args = [index, stone.x, stone.y, raiseBet]
     const signers = [player]
+    const limit = 9999
 
     const [txResult, error] = await shallPass(
-      sendTransaction('Gomoku-make-move', signers, args)
+      sendTransaction('Gomoku-make-move', signers, args, limit)
     )
     expect(error).toBeNull()
     console.log(txResult, error)
