@@ -117,39 +117,37 @@ export const matching = async (challenger, budget) => {
   console.log(txResult1, error1)
 }
 
-export const matchGomokuAlongWithRegister = async (hostAddressName, bet) => {
+export const matchGomokuAlongWithRegister = async (index, hostAddressName, challengerAddressName, bet) => {
   await registerWithFlowByAddress(hostAddressName, bet)
 
   const host = await getAccountAddress(hostAddressName)
 
-  const bob = await getAccountAddress("Bob")
+  const challenger = await getAccountAddress(challengerAddressName)
 
-  await serviceAccountMintTo(bob, bet)
+  await matching(challenger, bet)
 
-  await matching(bob, bet)
-
-  const [scriptResult, scriptError] = await executeScript('Gomoku-get-composition-ref', [1])
+  const [scriptResult, scriptError] = await executeScript('Gomoku-get-composition-ref', [index])
   expect(scriptError).toBeNull()
   console.log(scriptResult)
   expect(scriptResult["host"]).toBe(host)
-  expect(scriptResult["challenger"]).toBe(bob)
+  expect(scriptResult["challenger"]).toBe(challenger)
   expect(scriptResult["currentRound"]).toBe(0)
-  expect(scriptResult["id"]).toBe(1)
+  expect(scriptResult["id"]).toBe(index)
   expect(Object.keys(scriptResult["locationStoneMaps"]).length).toBe(2)
   expect(scriptResult["roundWiners"]).toEqual([])
   expect(scriptResult["steps"]).toEqual([[], []])
   expect(scriptResult["totalRound"]).toBe(2)
   expect(scriptResult["winner"]).toBeNull()
 
-  const [scriptResult2, scriptError2] = await executeScript('Gomoku-get-participants', [1])
+  const [scriptResult2, scriptError2] = await executeScript('Gomoku-get-participants', [index])
   expect(scriptError2).toBeNull()
-  expect(scriptResult2).toEqual([host, bob])
+  expect(scriptResult2).toEqual([host, challenger])
 
-  const [scriptResult3, scriptError3] = await executeScript('Gomoku-get-opening-bet', [1])
+  const [scriptResult3, scriptError3] = await executeScript('Gomoku-get-opening-bet', [index])
   expect(scriptError3).toBeNull()
   expect(scriptResult3).toBe(`${bet * 2}.00000000`)
 
-  const [scriptResult4, scriptError4] = await executeScript('Gomoku-get-valid-bets', [1])
+  const [scriptResult4, scriptError4] = await executeScript('Gomoku-get-valid-bets', [index])
   expect(scriptError4).toBeNull()
   expect(scriptResult4).toBe(`${bet * 2}.00000000`)
 }
@@ -171,40 +169,33 @@ export const makeMove = async (player, index, round, stone, raiseBet, expectSton
   expect(scriptResult).toEqual(expectStoneData)
 }
 
-export const simulateMoves = async (compositionIndex, roundIndex, host, bobMoves, aliceMoves) => {
-  const alice = await getAccountAddress(adminAddressName)
-  const bob = await getAccountAddress("Bob")
+export const simulateMoves = async (
+  compositionIndex,
+  roundIndex,
+  hostName,
+  challengerName,
+  hostMoves,
+  challengerMoves
+) => {
+  const host = await getAccountAddress(hostName)
+  const challenger = await getAccountAddress(challengerName)
   let firstTaker
   let secondTaker
   let firstTakerMoves = []
   let secondTakerMoves = []
-  if (host == alice) {
-    if (roundIndex % 2 == 0) {
-      firstTaker = bob
-      secondTaker = alice
-      firstTakerMoves = bobMoves
-      secondTakerMoves = aliceMoves
-    } else {
-      firstTaker = alice
-      secondTaker = bob
-      firstTakerMoves = aliceMoves
-      secondTakerMoves = bobMoves
-    }
+  if (roundIndex % 2 == 0) {
+    firstTaker = challenger
+    secondTaker = host
+    firstTakerMoves = challengerMoves
+    secondTakerMoves = hostMoves
   } else {
-    if (roundIndex % 2 == 0) {
-      firstTaker = alice
-      secondTaker = bob
-      firstTakerMoves = aliceMoves
-      secondTakerMoves = bobMoves
-    } else {
-      firstTaker = bob
-      secondTaker = alice
-      firstTakerMoves = bobMoves
-      secondTakerMoves = aliceMoves
-    }
+    firstTaker = host
+    secondTaker = challenger
+    firstTakerMoves = hostMoves
+    secondTakerMoves = challengerMoves
   }
   let moves = []
-  for (let step = 0; step < bobMoves.length; step++) {
+  for (let step = 0; step < firstTakerMoves.length; step++) {
     const firstTakerMove = firstTakerMoves[step]
     if (firstTakerMove) {
       moves.push(

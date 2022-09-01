@@ -29,8 +29,6 @@ describe("Matcher", () => {
 
   test("match successfully", async () => {
 
-    emulator.setLogging(true)
-
     const alice = await getAccountAddress("Alice")
     const args = []
     const signers = [alice]
@@ -39,6 +37,11 @@ describe("Matcher", () => {
       sendTransaction('TestMatcher-admin-active-register', signers, args)
     )
     console.log(txResult, error)
+
+    const [registerTxResult, registerError] = await shallPass(
+      sendTransaction('TestMatcher-register', signers, args)
+    )
+    console.log(registerTxResult, registerError)
 
     const [activeMatchTxResult, activeMatchError] = await shallPass(
       sendTransaction('TestMatcher-admin-active-match', [alice], [])
@@ -74,7 +77,7 @@ describe("Matcher", () => {
     const [aliceWaitingIndex, aliceWaitingError] = await executeScript('Matcher-get-first-waiting-index-by-address', [alice])
     expect(aliceWaitingError).toBeNull()
     expect(aliceWaitingIndex).toBeNull()
-    
+
     const [aliceMatchedIndex, aliceMatchedError] = await executeScript('Matcher-get-matched-by-address', [alice])
     expect(aliceMatchedError).toBeNull()
     expect(aliceMatchedIndex).toEqual([0])
@@ -82,7 +85,7 @@ describe("Matcher", () => {
     const [aliceWaitingInde2, aliceWaitingError2] = await executeScript('Matcher-get-waiting-by-address', [alice])
     expect(aliceWaitingError2).toBeNull()
     expect(aliceWaitingInde2).toEqual([])
-    
+
     const [bobWaitingIndex, bobWaitingError] = await executeScript('Matcher-get-first-waiting-index-by-address', [bob])
     expect(bobWaitingError).toBeNull()
     expect(bobWaitingIndex).toBeNull()
@@ -98,7 +101,7 @@ describe("Matcher", () => {
     const [waitingIndices, waitingIndicesError] = await executeScript('Matcher-get-waiting-indices', [])
     expect(waitingIndicesError).toBeNull()
     expect(waitingIndices).toEqual([])
-    
+
     const [matchIndices, matchIndicesError] = await executeScript('Matcher-get-matched-indices', [])
     expect(matchIndicesError).toBeNull()
     expect(matchIndices).toEqual([0])
@@ -115,8 +118,6 @@ describe("Matcher", () => {
     expect(hostScriptError2).toBeNull()
     expect(hostResult2).toEqual(alice)
 
-    emulator.setLogging(false)
-
   })
 
   test("match again with same index", async () => {
@@ -130,10 +131,17 @@ describe("Matcher", () => {
     )
     console.log(txResult, error)
 
+    const [registerTxResult, registerError] = await shallPass(
+      sendTransaction('TestMatcher-register', signers, args)
+    )
+    console.log(registerTxResult, registerError)
+    expect(registerError).toBeNull()
+
     const [activeMatchTxResult, activeMatchError] = await shallPass(
       sendTransaction('TestMatcher-admin-active-match', [alice], [])
     )
     console.log(activeMatchTxResult, activeMatchError)
+    expect(activeMatchError).toBeNull()
     expect(activeMatchError).toBeNull()
 
     const [scriptResult, scriptError] = await executeScript('Matcher-get-random-waiting-index', [])

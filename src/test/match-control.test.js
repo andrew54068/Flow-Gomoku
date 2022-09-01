@@ -195,7 +195,7 @@ describe("Matcher control", () => {
     const [aliceWaitingIndex, scriptError3] = await executeScript('Matcher-get-first-waiting-index-by-address', [alice])
     expect(scriptError3).toBeNull()
     expect(aliceWaitingIndex).toBe(0)
-    
+
     const [bobWaitingIndex, scriptError4] = await executeScript('Matcher-get-first-waiting-index-by-address', [bob])
     expect(scriptError4).toBeNull()
     expect(bobWaitingIndex).toBe(1)

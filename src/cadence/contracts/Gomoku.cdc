@@ -659,6 +659,7 @@ pub contract Gomoku {
                     .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
                     .borrow() {
                     if let challengerIdentityToken <- identityCollectionRef.withdraw(by: identityTokenId) {
+                        challengerIdentityToken.setDestroyable(true)
                         destroy challengerIdentityToken
                     } else {
                         emit ResourceNotFound(

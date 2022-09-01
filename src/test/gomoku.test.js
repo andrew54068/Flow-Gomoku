@@ -19,8 +19,6 @@ import {
   simulateMoves
 } from "./utils";
 
-
-
 describe("Gomoku", () => {
   beforeEach(async () => {
     const basePath = path.resolve(__dirname, "../cadence");
@@ -127,7 +125,10 @@ describe("Gomoku", () => {
 
     await registerWithFlowByAddress(aliceAddress, 3)
 
-    await matchGomokuAlongWithRegister(aliceAddress, 2)
+    const bobAddressName = "Bob"
+    const bob = await getAccountAddress(bobAddressName)
+    await serviceAccountMintTo(bob, 2)
+    await matchGomokuAlongWithRegister(1, aliceAddress, bobAddressName, 2)
   })
 
   test("match with match enable budget not enough", async () => {
@@ -169,9 +170,10 @@ describe("Gomoku", () => {
     const aliceAddressName = adminAddressName
     await registerWithFlowByAddress(aliceAddressName, 3)
 
-    await matchGomokuAlongWithRegister(aliceAddressName, 2)
-
-    const bob = await getAccountAddress("Bob")
+    const bobAddressName = "Bob"
+    const bob = await getAccountAddress(bobAddressName)
+    await serviceAccountMintTo(bob, 2)
+    await matchGomokuAlongWithRegister(1, aliceAddressName, bobAddressName, 2)
 
     const [aliceBalance, aliceBalanceError] = await executeScript('Flow-balance', [alice])
     expect(aliceBalanceError).toBeNull()
@@ -228,7 +230,7 @@ describe("Gomoku", () => {
       }
     ]
 
-    await simulateMoves(compositionIndex, roundIndex, alice, bobMoves, aliceMoves)
+    await simulateMoves(compositionIndex, roundIndex, aliceAddressName, bobAddressName, aliceMoves, bobMoves)
 
     const [scriptResult, scriptError] = await executeScript('Gomoku-get-round-winner', [compositionIndex, roundIndex])
     expect(scriptError).toBeNull()
@@ -285,7 +287,7 @@ describe("Gomoku", () => {
       }
     ]
 
-    await simulateMoves(compositionIndex, roundIndex, alice, bobMoves, aliceMoves)
+    await simulateMoves(compositionIndex, roundIndex, aliceAddressName, bobAddressName, aliceMoves, bobMoves)
 
     const [scriptResult2, scriptError2] = await executeScript('Gomoku-get-round-winner', [compositionIndex, roundIndex])
     expect(scriptError2).toBeNull()
