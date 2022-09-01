@@ -62,8 +62,6 @@ describe("Gomoku", () => {
   const registerWithFlowByAdmin = async (bet) => {
     const admin = await getAccountAddress(adminAddress)
 
-    await serviceAccountMintTo(admin, 5)
-
     const args = []
     const signers = [admin]
 
@@ -329,13 +327,24 @@ describe("Gomoku", () => {
   }
 
   test("make moves", async () => {
+    const alice = await getAccountAddress(adminAddress)
+    await serviceAccountMintTo(alice, 6)
 
     await registerWithFlowByAdmin(3)
     
     await matchGomoku(2)
 
-    const alice = await getAccountAddress(adminAddress)
     const bob = await getAccountAddress("Bob")
+
+    const [aliceBalance, aliceBalanceError] = await executeScript('Flow-balance', [alice])
+    expect(aliceBalanceError).toBeNull()
+    console.log(aliceBalance)
+    expect(aliceBalance).toEqual("1.00100000")
+
+    const [bobBalance, bobBalanceError] = await executeScript('Flow-balance', [bob])
+    expect(bobBalanceError).toBeNull()
+    console.log(bobBalance)
+    expect(bobBalance).toEqual("0.00100000")
 
     const compositionIndex = 1
     let roundIndex = 0
@@ -447,6 +456,16 @@ describe("Gomoku", () => {
     expect(scriptResult2).toEqual({
       rawValue: Role.challenger
     })
+
+    const [aliceBalance2, aliceBalanceError2] = await executeScript('Flow-balance', [alice])
+    expect(aliceBalanceError2).toBeNull()
+    console.log(aliceBalance2)
+    expect(aliceBalance2).toEqual("1.24100000")
+
+    const [bobBalance2, bobBalanceError2] = await executeScript('Flow-balance', [bob])
+    expect(bobBalanceError2).toBeNull()
+    console.log(bobBalance2)
+    expect(bobBalance2).toEqual("3.76100000")
 
   }, 5 * 60 * 1000)
 

@@ -628,8 +628,10 @@ pub contract Gomoku {
                 // host get extra 1% for being host.
                 // winner get 94%.
                 let devRewardBalance = tatalVault.balance * UFix64(5) / UFix64(100)
-                let winnerRewardBalance = tatalVault.balance - devRewardBalance
+                let hostRewardBalance = tatalVault.balance * UFix64(1) / UFix64(100)
+                let winnerRewardBalance = tatalVault.balance - devRewardBalance - hostRewardBalance
                 devReward.deposit(from: <- tatalVault.withdraw(amount: devRewardBalance))
+                hostReward.deposit(from: <- tatalVault.withdraw(amount: hostRewardBalance))
                 winnerReward.deposit(from: <- tatalVault.withdraw(amount: winnerRewardBalance))
                 destroy tatalVault
             case GomokuType.Result.draw:
