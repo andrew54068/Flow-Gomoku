@@ -13,6 +13,8 @@ import {
   expectContractDeployed,
   matchGomokuAlongWithRegister,
   Result,
+  roundDrawSteps,
+  roundDrawSteps2,
   serviceAccountMintTo,
   simulateMoves
 } from "./utils";
@@ -858,6 +860,192 @@ describe("Gomoku", () => {
     const [bobBalance, bobBalanceError] = await executeScript('Flow-balance', [bob])
     console.log(bobBalance)
     expect(bobBalanceError).toBeNull()
+    expect(bobBalance).toEqual("18.80100000")
+
+  }, 5 * 60 * 1000)
+
+  test("draw in first round", async () => {
+    const joe = await getAccountAddress(joeAddressName)
+    const bob = await getAccountAddress(bobAddressName)
+    const alice = await getAccountAddress(adminAddressName)
+
+    const compositionIndex = 0
+    let roundIndex = 0
+
+    let bobMoves = roundDrawSteps
+
+    let joeMoves = roundDrawSteps2
+
+    await simulateMoves(compositionIndex, roundIndex, joeAddressName, bobAddressName, joeMoves, bobMoves)
+
+    const [scriptResult, scriptError] = await executeScript('Gomoku-get-round-winner', [compositionIndex, roundIndex])
+    expect(scriptError).toBeNull()
+    console.log(scriptResult)
+    expect(scriptResult).toEqual({
+      rawValue: Result.draw
+    })
+
+    roundIndex++
+
+    joeMoves = [
+      {
+        x: 7,
+        y: 8
+      },
+      {
+        x: 8,
+        y: 8
+      },
+      {
+        x: 9,
+        y: 8
+      },
+      {
+        x: 10,
+        y: 8
+      },
+      {
+        x: 10,
+        y: 9
+      }
+    ]
+
+    bobMoves = [
+      {
+        x: 7,
+        y: 7
+      },
+      {
+        x: 8,
+        y: 7
+      },
+      {
+        x: 9,
+        y: 7
+      },
+      {
+        x: 10,
+        y: 7
+      },
+      {
+        x: 11,
+        y: 7
+      }
+    ]
+
+    await simulateMoves(compositionIndex, roundIndex, joeAddressName, bobAddressName, joeMoves, bobMoves)
+
+    const [scriptResult2, scriptError2] = await executeScript('Gomoku-get-round-winner', [compositionIndex, roundIndex])
+    expect(scriptError2).toBeNull()
+    console.log(scriptResult2)
+    expect(scriptResult2).toEqual({
+      rawValue: Result.challengerWins
+    })
+
+    const [aliceBalance, aliceBalanceError] = await executeScript('Flow-balance', [alice])
+    expect(aliceBalanceError).toBeNull()
+    console.log(aliceBalance)
+    expect(aliceBalance).toEqual("1.00100000")
+
+    const [joeBalance, joeBalanceError] = await executeScript('Flow-balance', [joe])
+    expect(joeBalanceError).toBeNull()
+    console.log(joeBalance)
+    expect(joeBalance).toEqual("1.20100000")
+
+    const [bobBalance, bobBalanceError] = await executeScript('Flow-balance', [bob])
+    expect(bobBalanceError).toBeNull()
+    console.log(bobBalance)
+    expect(bobBalance).toEqual("18.80100000")
+
+  }, 5 * 60 * 1000)
+
+  test("draw in second round", async () => {
+    const joe = await getAccountAddress(joeAddressName)
+    const bob = await getAccountAddress(bobAddressName)
+    const alice = await getAccountAddress(adminAddressName)
+
+    const compositionIndex = 0
+    let roundIndex = 0
+
+    let bobMoves = [
+      {
+        x: 7,
+        y: 7
+      },
+      {
+        x: 8,
+        y: 7
+      },
+      {
+        x: 9,
+        y: 7
+      },
+      {
+        x: 10,
+        y: 7
+      },
+      {
+        x: 11,
+        y: 7
+      }
+    ]
+
+    let joeMoves = [
+      {
+        x: 7,
+        y: 8
+      },
+      {
+        x: 8,
+        y: 8
+      },
+      {
+        x: 9,
+        y: 8
+      },
+      {
+        x: 10,
+        y: 8
+      }
+    ]
+
+    await simulateMoves(compositionIndex, roundIndex, joeAddressName, bobAddressName, joeMoves, bobMoves)
+
+    const [scriptResult, scriptError] = await executeScript('Gomoku-get-round-winner', [compositionIndex, roundIndex])
+    expect(scriptError).toBeNull()
+    console.log(scriptResult)
+    expect(scriptResult).toEqual({
+      rawValue: Result.challengerWins
+    })
+
+    roundIndex++
+
+    bobMoves = roundDrawSteps2
+
+    joeMoves = roundDrawSteps
+
+    await simulateMoves(compositionIndex, roundIndex, joeAddressName, bobAddressName, joeMoves, bobMoves)
+
+    const [scriptResult2, scriptError2] = await executeScript('Gomoku-get-round-winner', [compositionIndex, roundIndex])
+    expect(scriptError2).toBeNull()
+    console.log(scriptResult2)
+    expect(scriptResult2).toEqual({
+      rawValue: Result.draw
+    })
+
+    const [aliceBalance, aliceBalanceError] = await executeScript('Flow-balance', [alice])
+    expect(aliceBalanceError).toBeNull()
+    console.log(aliceBalance)
+    expect(aliceBalance).toEqual("1.00100000")
+
+    const [joeBalance, joeBalanceError] = await executeScript('Flow-balance', [joe])
+    expect(joeBalanceError).toBeNull()
+    console.log(joeBalance)
+    expect(joeBalance).toEqual("1.20100000")
+
+    const [bobBalance, bobBalanceError] = await executeScript('Flow-balance', [bob])
+    expect(bobBalanceError).toBeNull()
+    console.log(bobBalance)
     expect(bobBalance).toEqual("18.80100000")
 
   }, 5 * 60 * 1000)

@@ -471,9 +471,17 @@ pub contract Gomoku {
                 if UInt8(self.steps[self.currentRound].length) == self.boardSize * self.boardSize {
                     // no step to take next.
                     self.roundWinners.append(GomokuType.Result.draw)
-                    self.switchRound()
+                    // end of current round
+                    if self.currentRound + UInt8(1) < self.totalRound {
+                        identityCollectionRef.deposit(token: <- identityToken)
+                        self.switchRound()
+                    } else {
+                        // end of game
+                        self.finalize(identityToken: <- identityToken)
+                    }
+                } else {
+                    identityCollectionRef.deposit(token: <- identityToken)
                 }
-                identityCollectionRef.deposit(token: <- identityToken)
             }
         }
 

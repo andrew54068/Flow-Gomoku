@@ -4,7 +4,7 @@
   "license": "MIT",
   "scripts": {
     "ts": "node -r esbuild-register -r tsconfig-paths/register",
-    "start": "node -r esbuild-register -r tsconfig-paths/register src/test.ts",
+    "start": "node -r esbuild-register -r tsconfig-paths/register test.ts",
     "ts-check": "tsc --noEmit",
     "test": "jest test --testPathIgnorePatterns=test/match.test.js"
   },
