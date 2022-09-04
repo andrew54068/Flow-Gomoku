@@ -44,10 +44,17 @@ pub contract Gomoku {
     pub event CollectionNotFound(type: Type, path: Path, address: Address)
     pub event ResourceNotFound(id: UInt32, type: Type, address: Address)
 
-    pub event makeMove(
+    pub event MakeMove(
+        compositionId: UInt32,
         locationX: Int8,
         locationY: Int8,
         stoneColor: UInt8)
+
+    pub event RoundSwitch(
+        compositionId: UInt32,
+        previous: UInt8,
+        next: UInt8
+    )
 
     init() {
         self.CollectionStoragePath = /storage/gomokuCompositionCollection
@@ -272,7 +279,7 @@ pub contract Gomoku {
 
         priv var host: Address
         priv var challenger: Address?
-        priv var roundWiners: [GomokuType.Role]
+        priv var roundWinners: [GomokuType.Result]
         priv var steps: @[[Stone]]
         priv var locationStoneMaps: [{String: GomokuType.StoneColor}]
 
@@ -294,7 +301,7 @@ pub contract Gomoku {
             self.totalRound = totalRound
             self.currentRound = 0
             self.winner = nil
-            self.roundWiners = []
+            self.roundWinners = []
 
             self.steps <- []
             self.locationStoneMaps = []
@@ -353,9 +360,9 @@ pub contract Gomoku {
             }
         }
 
-        pub fun getRoundWinner(by index: UInt8): GomokuType.Role? {
-            if self.roundWiners.length > Int(index) {
-                return self.roundWiners[index]
+        pub fun getRoundWinner(by index: UInt8): GomokuType.Result? {
+            if self.roundWinners.length > Int(index) {
+                return self.roundWinners[index]
             } else {
                 return nil
             }
@@ -374,7 +381,7 @@ pub contract Gomoku {
             assert(identityTokenRef?.owner?.address == identityTokenRef?.address, message: "Identity token should not be transfer to other.")
 
             let identityToken <- identityCollectionRef.withdraw(by: self.id) ?? panic("You are not suppose to make this move.")
-            assert(Int(self.currentRound) + 1 > self.roundWiners.length, message: "Game Over.")
+            assert(Int(self.currentRound) + 1 > self.roundWinners.length, message: "Game Over.")
 
             let stone <- create Stone(
                 color: identityToken.stoneColor,
@@ -430,7 +437,8 @@ pub contract Gomoku {
             // reset timeout
             self.latestBlockHeight = getCurrentBlock().height
 
-            emit makeMove(
+            emit MakeMove(
+                compositionId: self.id,
                 locationX: stoneRef.location.x,
                 locationY: stoneRef.location.y,
                 stoneColor: stoneRef.color.rawValue)
@@ -438,8 +446,18 @@ pub contract Gomoku {
             let hasRoundWinner = self.checkWinnerInAllDirection(
                 targetColor: stoneRef.color,
                 center: stoneRef.location)
+
             if hasRoundWinner {
-                self.roundWiners.append(identityToken.role)
+                var rountResult: GomokuType.Result = GomokuType.Result.draw
+                switch identityToken.role {
+                case GomokuType.Role.host:
+                    rountResult = GomokuType.Result.hostWins
+                case GomokuType.Role.challenger:
+                    rountResult = GomokuType.Result.challengerWins
+                default:
+                    panic("Should not be the case.")
+                }
+                self.roundWinners.append(rountResult)
                 // event
                 // end of current round
                 if self.currentRound + UInt8(1) < self.totalRound {
@@ -450,32 +468,44 @@ pub contract Gomoku {
                     self.finalize(identityToken: <- identityToken)
                 }
             } else {
+                if UInt8(self.steps[self.currentRound].length) == self.boardSize * self.boardSize {
+                    // no step to take next.
+                    self.roundWinners.append(GomokuType.Result.draw)
+                    self.switchRound()
+                }
                 identityCollectionRef.deposit(token: <- identityToken)
             }
         }
 
         pub fun surrender(
-            identityToken: @GomokuIdentity.IdentityToken
-        ): @GomokuIdentity.IdentityToken? {
+            identityCollectionRef: &GomokuIdentity.IdentityCollection
+        ) {
             pre {
-                identityToken.id == self.id: "You are not authorized to make this move."
+                self.roundWinners.length == Int(self.currentRound): "Current round index should be equal to number of round winners."
             }
+
+            // check identity
+            let identityTokenRef = identityCollectionRef.borrow(id: self.id) as &GomokuIdentity.IdentityToken?
+            assert(identityTokenRef != nil, message: "Identity token ref not found.")
+            assert(identityTokenRef?.owner?.address == identityTokenRef?.address, message: "Identity token should not be transfer to other.")
+
+            let identityToken <- identityCollectionRef.withdraw(by: self.id) ?? panic("Identity token ref not found.")
+
             switch identityToken.role {
             case GomokuType.Role.host:
-                self.roundWiners[self.currentRound] = GomokuType.Role.challenger
+                self.roundWinners.append(GomokuType.Result.challengerWins)
             case GomokuType.Role.challenger:
-                self.roundWiners[self.currentRound] = GomokuType.Role.host
+                self.roundWinners.append(GomokuType.Result.hostWins)
             default:
                 panic("Should not be the case.")
             }
             if self.currentRound + 1 < self.totalRound {
                 // switch to next round
+                identityCollectionRef.deposit(token: <- identityToken)
                 self.switchRound()
-                return <- identityToken
             } else {
                 // final round
                 self.finalize(identityToken: <- identityToken)
-                return nil
             }
         }
 
@@ -510,9 +540,9 @@ pub contract Gomoku {
             let nextRole = self.getRole()
             switch nextRole {
             case GomokuType.Role.host:
-                self.roundWiners.append(GomokuType.Role.challenger)
+                self.roundWinners.append(GomokuType.Result.challengerWins)
             case GomokuType.Role.challenger:
-                self.roundWiners.append(GomokuType.Role.host)
+                self.roundWinners.append(GomokuType.Result.hostWins)
             default:
                 panic("Should not be the case.")
             }
@@ -532,7 +562,7 @@ pub contract Gomoku {
         // Private Method
         priv fun finalize(identityToken: @GomokuIdentity.IdentityToken) {
             pre {
-                self.roundWiners.length == Int(self.totalRound): "Game not over yet!"
+                self.roundWinners.length == Int(self.totalRound): "Game not over yet!"
                 self.challenger != nil: "Challenger not found."
                 Gomoku.hostOpeningBetMap.keys.contains(identityToken.id): "Host's OpeningBet not found."
                 Gomoku.challengerOpeningBetMap.keys.contains(identityToken.id): "Challenger's OpeningBet not found."
@@ -865,13 +895,14 @@ pub contract Gomoku {
 
         priv fun switchRound() {
             pre {
-                self.roundWiners[self.currentRound] != nil: "Current round winner not decided."
+                self.roundWinners[self.currentRound] != nil: "Current round winner not decided."
                 self.totalRound > self.currentRound + 1: "Next round should not over totalRound."
             }
             post {
                 self.currentRound == before(self.currentRound) + 1: "fatal error."
-                self.roundWiners.length == Int(self.currentRound): "Should not have winner right after switching rounds."
+                self.roundWinners.length == Int(self.currentRound): "Should not have winner right after switching rounds."
             }
+            let previous = self.currentRound
             self.currentRound = self.currentRound + 1
 
             let hostIdentityCollectionCapability = getAccount(self.host)
@@ -893,11 +924,17 @@ pub contract Gomoku {
             } else {
                 panic("Could not borrow a reference to identityToken.")
             }
+
+            emit RoundSwitch(
+                compositionId: self.id,
+                previous: previous,
+                next: self.currentRound
+            )
         }
 
         priv fun verifyAndStoreStone(stone: @Stone) {
             pre {
-                // self.steps.length == 2: "Steps length should be 2."
+                self.steps.length == 2: "Steps length should be 2."
                 Int(self.currentRound) <= 1: "Composition only has 2 round each."
             }
             let roundSteps = &self.steps[self.currentRound] as &[AnyResource{GomokuType.Stoning}]
@@ -1116,23 +1153,22 @@ pub contract Gomoku {
 
         priv fun getWinnerResult(): GomokuType.Result {
             pre {
-                self.roundWiners.length == Int(self.totalRound): "Game not over yet!"
+                self.roundWinners.length == Int(self.totalRound): "Game not over yet!"
             }
 
-            let firstRoundWinner = self.roundWiners[0]
-            let secondRoundWinner = self.roundWiners[1]
+            let firstRoundWinner = self.roundWinners[0]
+            let secondRoundWinner = self.roundWinners[1]
             if firstRoundWinner == secondRoundWinner {
-                let winner = firstRoundWinner
                 // has winner
-                switch winner {
-                case GomokuType.Role.host:
+                return firstRoundWinner
+            } else if self.roundWinners.contains(GomokuType.Result.draw) {
+                if self.roundWinners.contains(GomokuType.Result.hostWins) {
                     return GomokuType.Result.hostWins
-                case GomokuType.Role.challenger:
+                } else if self.roundWinners.contains(GomokuType.Result.challengerWins) {
                     return GomokuType.Result.challengerWins
-                default:
-                    panic("Should not be the case.")
+                } else {
+                    return GomokuType.Result.draw
                 }
-                return GomokuType.Result.draw
             } else {
                 return GomokuType.Result.draw
             }

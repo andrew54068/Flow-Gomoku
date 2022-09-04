@@ -1,4 +1,3 @@
-import MatchContract from "../contracts/MatchContract.cdc"
 import Gomoku from "../contracts/Gomoku.cdc"
 import FlowToken from "../contracts/FlowToken.cdc"
 import FungibleToken from "../contracts/FungibleToken.cdc"

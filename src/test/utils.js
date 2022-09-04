@@ -11,9 +11,10 @@ export const StoneColor = {
   white: 1
 }
 
-export const Role = {
-  host: 0,
-  challenger: 1
+export const Result = {
+  hostWins: 0,
+  challengerWins: 1,
+  draw: 2
 }
 
 export const adminAddressName = "Alice"
@@ -134,7 +135,7 @@ export const matchGomokuAlongWithRegister = async (index, hostAddressName, chall
   expect(scriptResult["currentRound"]).toBe(0)
   expect(scriptResult["id"]).toBe(index)
   expect(Object.keys(scriptResult["locationStoneMaps"]).length).toBe(2)
-  expect(scriptResult["roundWiners"]).toEqual([])
+  expect(scriptResult["roundWinners"]).toEqual([])
   expect(scriptResult["steps"]).toEqual([[], []])
   expect(scriptResult["totalRound"]).toBe(2)
   expect(scriptResult["winner"]).toBeNull()
