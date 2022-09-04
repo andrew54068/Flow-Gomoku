@@ -279,6 +279,7 @@ pub contract Gomoku {
         priv var roundWinners: [GomokuType.Result]
         priv var steps: @[[Stone]]
         priv var locationStoneMaps: [{String: GomokuType.StoneColor}]
+        priv var destroyable: Bool
 
         init(
             id: UInt32,
@@ -311,6 +312,7 @@ pub contract Gomoku {
 
             self.latestBlockHeight = getCurrentBlock().height
             self.blockHeightTimeout = UInt64(60 * 60 * 24 * 7)
+            self.destroyable = false
 
             emit CompositionCreated(
                 host: host,
@@ -872,6 +874,7 @@ pub contract Gomoku {
 
             destroy winnerResultCollection
             destroy losserResultCollection
+            self.destroyable = true
         }
 
         // Challenger go first in first round
@@ -1180,6 +1183,9 @@ pub contract Gomoku {
         }
 
         destroy() {
+            if self.destroyable == false {
+                panic("You can't destory this composition by yourself!")
+            }
             destroy self.steps
         }
 
