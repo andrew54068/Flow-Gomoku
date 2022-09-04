@@ -36,11 +36,8 @@ describe("Gomoku", () => {
     const names = [
       'MatchContract',
       'GomokuType',
-      'GomokuResulting',
       'GomokuResult',
-      'GomokuIdentifying',
       'GomokuIdentity',
-      'Gomokuing',
       'Gomoku'
     ]
 

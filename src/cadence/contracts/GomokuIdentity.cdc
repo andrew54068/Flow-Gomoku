@@ -1,4 +1,3 @@
-import GomokuIdentifying from "./GomokuIdentifying.cdc"
 import GomokuType from "./GomokuType.cdc"
 
 pub contract GomokuIdentity {

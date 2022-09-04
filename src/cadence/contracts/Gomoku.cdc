@@ -3,11 +3,8 @@ import FungibleToken from "./FungibleToken.cdc"
 // import FlowToken from 0x0ae53cb6e3f42a79
 import FlowToken from "./FlowToken.cdc"
 
-import GomokuIdentifying from "./GomokuIdentifying.cdc"
 import GomokuIdentity from "./GomokuIdentity.cdc"
-import GomokuResulting from "./GomokuResulting.cdc"
 import GomokuResult from "./GomokuResult.cdc"
-// import Gomokuing from "./Gomokuing.cdc"
 import GomokuType from "./GomokuType.cdc"
 
 pub contract Gomoku {

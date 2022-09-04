@@ -38,11 +38,8 @@ describe("Deploy Contracts", () => {
     const names = [
       'MatchContract',
       'GomokuType',
-      'GomokuResulting',
       'GomokuResult',
-      'GomokuIdentifying',
       'GomokuIdentity',
-      'Gomokuing'
     ]
 
     for (const name of names) {

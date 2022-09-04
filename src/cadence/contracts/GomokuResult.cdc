@@ -1,7 +1,6 @@
-import GomokuResulting from "./GomokuResulting.cdc"
 import GomokuType from "./GomokuType.cdc"
 
-pub contract GomokuResult: GomokuResulting {
+pub contract GomokuResult {
 
     // Paths
     pub let CollectionStoragePath: StoragePath
@@ -18,7 +17,7 @@ pub contract GomokuResult: GomokuResulting {
         self.CollectionPublicPath = /public/gomokuResultCollection
     }
 
-    pub resource ResultToken: GomokuResulting.ResultTokening {
+    pub resource ResultToken {
         pub let id: UInt32
         pub let winner: Address?
         pub let losser: Address?
@@ -89,12 +88,12 @@ pub contract GomokuResult: GomokuResulting {
         )
     }
 
-    pub resource ResultCollection: GomokuResulting.ResultCollecting {
+    pub resource ResultCollection {
 
         pub let StoragePath: StoragePath
         pub let PublicPath: PublicPath
 
-        priv var ownedResultTokenMap: @{UInt32: AnyResource{GomokuResulting.ResultTokening}}
+        priv var ownedResultTokenMap: @{UInt32: GomokuResult.ResultToken}
         priv var destroyable: Bool
 
         init () {
@@ -104,7 +103,7 @@ pub contract GomokuResult: GomokuResulting {
             self.PublicPath = /public/gomokuResultCollection
         }
 
-        access(account) fun withdraw(by id: UInt32): @AnyResource{GomokuResulting.ResultTokening}? {
+        access(account) fun withdraw(by id: UInt32): @GomokuResult.ResultToken? {
             if let token <- self.ownedResultTokenMap.remove(key: id) {
                 emit Withdraw(id: token.id, from: self.owner?.address)
                 if self.ownedResultTokenMap.keys.length == 0 {
@@ -116,7 +115,7 @@ pub contract GomokuResult: GomokuResulting {
             }
         }
 
-        access(account) fun deposit(token: @AnyResource{GomokuResulting.ResultTokening}) {
+        access(account) fun deposit(token: @GomokuResult.ResultToken) {
             let token <- token
             let id: UInt32 = token.id
             let oldToken <- self.ownedResultTokenMap[id] <- token
@@ -129,8 +128,8 @@ pub contract GomokuResult: GomokuResulting {
             return self.ownedResultTokenMap.keys
         }
 
-        pub fun borrow(id: UInt32): &AnyResource{GomokuResulting.ResultTokening}? {
-            return &self.ownedResultTokenMap[id] as &AnyResource{GomokuResulting.ResultTokening}?
+        pub fun borrow(id: UInt32): &GomokuResult.ResultToken? {
+            return &self.ownedResultTokenMap[id] as &GomokuResult.ResultToken?
         }
 
         pub fun getBalance(): Int {
@@ -145,9 +144,10 @@ pub contract GomokuResult: GomokuResulting {
         }
     }
 
-    pub fun createEmptyVault(): @AnyResource{GomokuResulting.ResultCollecting} {
+    pub fun createEmptyVault(): @GomokuResult.ResultCollection {
         emit CollectionCreated()
         return <- create ResultCollection()
     }
 
 }
+ 
