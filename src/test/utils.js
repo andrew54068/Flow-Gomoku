@@ -300,3 +300,71 @@ export const simulateMoves = async (
     }
   }
 }
+
+export const simulateMovesWithRaise = async (
+  compositionIndex,
+  roundIndex,
+  hostName,
+  challengerName,
+  hostMovesWithRaise,
+  challengerMovesWithRaise
+) => {
+  const host = await getAccountAddress(hostName)
+  const challenger = await getAccountAddress(challengerName)
+  let firstTaker
+  let secondTaker
+  let firstTakerMoves = []
+  let secondTakerMoves = []
+  if (roundIndex % 2 == 0) {
+    firstTaker = challenger
+    secondTaker = host
+    firstTakerMoves = challengerMovesWithRaise
+    secondTakerMoves = hostMovesWithRaise
+  } else {
+    firstTaker = host
+    secondTaker = challenger
+    firstTakerMoves = hostMovesWithRaise
+    secondTakerMoves = challengerMovesWithRaise
+  }
+  let expectMoves = []
+  for (let step = 0; step < firstTakerMoves.length; step++) {
+    const firstTakerMove = firstTakerMoves[step]
+    if (firstTakerMove) {
+      expectMoves.push(
+        {
+          color: {
+            rawValue: StoneColor.black
+          },
+          location: {
+            x: firstTakerMove.x,
+            y: firstTakerMove.y
+          }
+        }
+      )
+      await makeMove(firstTaker, compositionIndex, roundIndex, {
+        color: StoneColor.black,
+        x: firstTakerMove.x,
+        y: firstTakerMove.y
+      }, firstTakerMove.raiseBet, expectMoves)
+    }
+    const secondTakerMove = secondTakerMoves[step]
+    if (secondTakerMove) {
+      expectMoves.push(
+        {
+          color: {
+            rawValue: StoneColor.white
+          },
+          location: {
+            x: secondTakerMove.x,
+            y: secondTakerMove.y
+          }
+        }
+      )
+      await makeMove(secondTaker, compositionIndex, roundIndex, {
+        color: StoneColor.white,
+        x: secondTakerMove.x,
+        y: secondTakerMove.y
+      }, secondTakerMove.raiseBet, expectMoves)
+    }
+  }
+}

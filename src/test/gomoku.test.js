@@ -89,7 +89,7 @@ describe("Gomoku", () => {
     const [txResult1, error1] = await shallRevert(
       sendTransaction('Gomoku-match', signers1, [0])
     )
-    expect(error1).toContain(`panic(\"Match failed.\")`)
+    expect(error1).toContain(`Match failed at index`)
   })
 
   test("match with matching not enable", async () => {

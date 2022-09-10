@@ -25,19 +25,18 @@ transaction(budget: UFix64) {
 
         var index = waitingIndex
 
-        while (Gomoku.getOpeningBet(by: index) ?? UFix64(0)) > budget 
+        while (Gomoku.getHostOpeningBet(by: index) ?? UFix64(0)) > budget
             || Gomoku.getParticipants(by: index).length != 1 {
             if Gomoku.getParticipants(by: index).length == 0 {
-                panic("Match failed.")
+                panic("Match failed at index".concat(index.toString()))
             }
             index = index + 1
         }
 
-        let openingBet = Gomoku.getOpeningBet(by: index) ?? UFix64(0)
-
         let vault: @FlowToken.Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
 
-        vault.deposit(from: <- self.flowTokenVault.withdraw(amount: openingBet))
+        let hostOpeningBet = Gomoku.getHostOpeningBet(by: index) ?? UFix64(0)
+        vault.deposit(from: <- self.flowTokenVault.withdraw(amount: hostOpeningBet))
 
         let recycleBetReceiverRef = self.challenger
             .getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)

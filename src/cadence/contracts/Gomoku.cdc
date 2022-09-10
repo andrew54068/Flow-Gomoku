@@ -107,23 +107,39 @@ pub contract Gomoku {
 
     // Opening bets
     pub fun getOpeningBet(by index: UInt32): UFix64? {
-        let hostBet = self.hostOpeningBetMap[index]?.balance
+        let hostBet = self.getHostOpeningBet(by: index)
         if hostBet == nil {
             return nil
         }
-        let challengerBet = self.challengerOpeningBetMap[index]?.balance
+        let challengerBet = self.getChallengerOpeningBet(by: index)
         if challengerBet == nil {
             return hostBet!
         }
         return hostBet! + challengerBet!
     }
 
+    pub fun getHostOpeningBet(by index: UInt32): UFix64? {
+        return self.hostOpeningBetMap[index]?.balance
+    }
+
+    pub fun getChallengerOpeningBet(by index: UInt32): UFix64? {
+        return self.challengerOpeningBetMap[index]?.balance
+    }
+
+    pub fun getHostRaisedBet(by index: UInt32): UFix64? {
+        return self.hostRaisedBetMap[index]?.balance
+    }
+
+    pub fun getChallengerRaisedBet(by index: UInt32): UFix64? {
+        return self.challengerRaisedBetMap[index]?.balance
+    }
+
     // Opening bets + raised bets
     pub fun getValidBets(by index: UInt32): UFix64? {
         let openingBet = self.getOpeningBet(by: index)
         if let bet = openingBet {
-            let hostRaisedBet = self.hostRaisedBetMap[index]?.balance ?? UFix64(0)
-            let challengerRaisedBet = self.challengerRaisedBetMap[index]?.balance ?? UFix64(0)
+            let hostRaisedBet = self.getHostRaisedBet(by: index) ?? UFix64(0)
+            let challengerRaisedBet = self.getChallengerRaisedBet(by: index) ?? UFix64(0)
             if hostRaisedBet >= challengerRaisedBet {
                 return bet + (challengerRaisedBet * UFix64(2))
             } else {
@@ -202,11 +218,16 @@ pub contract Gomoku {
                         identityCollectionRef: identityCollectionRef,
                         challenger: challenger)
 
+                    let hostOpeningBet = self.getHostOpeningBet(by: index)
+                    let challengerOpeningBet = self.getChallengerOpeningBet(by: index)
+                    assert(hostOpeningBet != nil, message: "Host opening bet should not be 0.")
+                    assert(challengerOpeningBet != nil, message: "Challenger opening bet should not be 0.")
+                    assert(hostOpeningBet! == challengerOpeningBet!, message: "Opening bet not match.")
                     emit CompositionMatched(
                         host: matchedHost,
                         challenger: challenger,
                         currency: Type<FlowToken>().identifier,
-                        openingBet: self.getOpeningBet(by: index) ?? UFix64(0))
+                        openingBet: hostOpeningBet! + challengerOpeningBet!)
                     return true
                 } else {
                     recycleBetVaultRef.deposit(from: <- bet)
