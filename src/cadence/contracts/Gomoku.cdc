@@ -153,9 +153,15 @@ pub contract Gomoku {
     pub fun register(
         host: Address,
         openingBet: @FlowToken.Vault,
-        identityCollectionRef: &GomokuIdentity.IdentityCollection,
-        compositionCollectionRef: &Gomoku.CompositionCollection
-    ) {
+        identityCollectionRef: auth &GomokuIdentity.IdentityCollection,
+        resultCollectionRef: auth &GomokuResult.ResultCollection,
+        compositionCollectionRef: auth &Gomoku.CompositionCollection
+    ) { 
+        pre {
+            identityCollectionRef.owner?.address == host: "You are not authorized to move other's Gomoku identity collection."
+            resultCollectionRef.owner?.address == host: "You are not authorized to move other's Gomoku result collection."
+            compositionCollectionRef.owner?.address == host: "You are not authorized to move other's Gomoku composition collection."
+        }
         let index = MatchContract.register(host: host)
 
         let betBalance: UFix64 = openingBet.balance
@@ -197,7 +203,8 @@ pub contract Gomoku {
         challenger: Address,
         bet: @FlowToken.Vault,
         recycleBetVaultRef: &FlowToken.Vault{FungibleToken.Receiver},
-        identityCollectionRef: &GomokuIdentity.IdentityCollection
+        identityCollectionRef: auth &GomokuIdentity.IdentityCollection,
+        resultCollectionRef: auth &GomokuResult.ResultCollection
     ): Bool {
         if let matchedHost = MatchContract.match(index: index, challengerAddress: challenger) {
             assert(matchedHost != challenger, message: "You can't play with yourself.")
@@ -390,7 +397,8 @@ pub contract Gomoku {
 
         // Transaction
         pub fun makeMove(
-            identityCollectionRef: &GomokuIdentity.IdentityCollection,
+            identityCollectionRef: auth &GomokuIdentity.IdentityCollection,
+            resultCollectionRef: auth &GomokuResult.ResultCollection,
             location: GomokuType.StoneLocation,
             raisedBet: @FlowToken.Vault
         ) {
@@ -402,6 +410,9 @@ pub contract Gomoku {
 
             let identityToken <- identityCollectionRef.withdraw(by: self.id) ?? panic("You are not suppose to make this move.")
             assert(Int(self.currentRound) + 1 > self.roundWinners.length, message: "Game Over.")
+
+            // check result
+            assert(resultCollectionRef.owner?.address == identityTokenRef?.address, message: "Gomoku result collection not found.")
 
             let stone <- create Stone(
                 color: identityToken.stoneColor,
@@ -506,7 +517,8 @@ pub contract Gomoku {
         }
 
         pub fun surrender(
-            identityCollectionRef: &GomokuIdentity.IdentityCollection
+            identityCollectionRef: auth &GomokuIdentity.IdentityCollection,
+            resultCollectionRef: auth &GomokuResult.ResultCollection
         ) {
             pre {
                 self.roundWinners.length == Int(self.currentRound): "Current round index should be equal to number of round winners."
@@ -516,6 +528,9 @@ pub contract Gomoku {
             let identityTokenRef = identityCollectionRef.borrow(id: self.id) as &GomokuIdentity.IdentityToken?
             assert(identityTokenRef != nil, message: "Identity token ref not found.")
             assert(identityTokenRef?.owner?.address == identityTokenRef?.address, message: "Identity token should not be transfer to other.")
+
+            // check result
+            assert(resultCollectionRef.owner?.address == identityTokenRef?.address, message: "Gomoku result collection not found.")
 
             let identityToken <- identityCollectionRef.withdraw(by: self.id) ?? panic("Identity token ref not found.")
 
@@ -557,6 +572,7 @@ pub contract Gomoku {
             identityCollectionRef.deposit(token: <- identity)
         }
 
+        // Call after making sure two participants both has ResultCollection.
         // Restricted to prevent from potential attack.
         access(account) fun finalizeByTimeout(
             identityToken: @GomokuIdentity.IdentityToken
@@ -588,7 +604,9 @@ pub contract Gomoku {
         }
 
         // Private Method
-        priv fun finalize(identityToken: @GomokuIdentity.IdentityToken) {
+        priv fun finalize(
+            identityToken: @GomokuIdentity.IdentityToken
+        ) {
             pre {
                 self.roundWinners.length == Int(self.totalRound): "Game not over yet!"
                 self.challenger != nil: "Challenger not found."
@@ -822,7 +840,7 @@ pub contract Gomoku {
                     id: id,
                     winner: winnerAddress,
                     losser: losserAddress,
-                    gain: -Fix64(totalReward / UFix64(2)),
+                    gain: Fix64(0),
                     steps: steps
                 )
                 losserResultCollection.deposit(token: <- losserResultToken)
@@ -843,7 +861,7 @@ pub contract Gomoku {
                     id: id,
                     winner: winnerAddress,
                     losser: losserAddress,
-                    gain: -Fix64(totalReward / UFix64(2)) + Fix64(hostReward),
+                    gain: Fix64(0),
                     steps: steps
                 )
                 losserResultCollection.deposit(token: <- losserResultToken)

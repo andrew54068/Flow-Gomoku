@@ -3,6 +3,7 @@ import Gomoku from 0xGOMOKU_ADDRESS
 import FlowToken from 0xFLOW_TOKEN_ADDRESS
 import FungibleToken from 0xFUNGIBLE_TOKEN_ADDRESS
 import GomokuIdentity from 0xGOMOKU_IDENTITY_ADDRESS
+import GomokuResult from 0xGOMOKU_RESULT_ADDRESS
 
 transaction(openingBet: UFix64) {
     let host: AuthAccount
@@ -19,7 +20,9 @@ transaction(openingBet: UFix64) {
           from: /storage/flowTokenVault) 
           ?? panic("Could not borrow a reference to Flow token vault")
 
-        if self.host.borrow<&GomokuIdentity.IdentityCollection>(from: GomokuIdentity.CollectionStoragePath) == nil {
+        if self.host
+            .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
+            .borrow() == nil {
             self.host.save(
                 <- GomokuIdentity.createEmptyVault(),
                 to: GomokuIdentity.CollectionStoragePath
@@ -29,11 +32,31 @@ transaction(openingBet: UFix64) {
                 target: GomokuIdentity.CollectionStoragePath
             )
         }
+        let identityCollectionRef = self.host
+            .borrow<auth &GomokuIdentity.IdentityCollection>(from: GomokuIdentity.CollectionStoragePath)
+            ?? panic("Could not borrow a reference to auth Gomoku identity collection.")
 
-        let identityCollectionRef = self.host.borrow<&GomokuIdentity.IdentityCollection>(from: GomokuIdentity.CollectionStoragePath)
-          ?? panic("Could not borrow a reference to GomokuIdentity IdentityCollection")
 
-        if self.host.borrow<&Gomoku.CompositionCollection>(from: Gomoku.CollectionStoragePath) == nil {
+        if self.host
+            .getCapability<&GomokuResult.ResultCollection>(GomokuResult.CollectionPublicPath)
+            .borrow() == nil {
+            self.host.save(
+                <- GomokuResult.createEmptyVault(),
+                to: GomokuResult.CollectionStoragePath
+            )
+            self.host.link<&GomokuResult.ResultCollection>(
+                GomokuResult.CollectionPublicPath,
+                target: GomokuResult.CollectionStoragePath
+            )
+        }
+        let resultCollectionRef = self.host
+            .borrow<auth &GomokuResult.ResultCollection>(from: GomokuResult.CollectionStoragePath)
+            ?? panic("Could not borrow a reference to auth Gomoku result collection.")
+
+
+        if self.host
+            .getCapability<&Gomoku.CompositionCollection>(Gomoku.CollectionPublicPath)
+            .borrow() == nil {
             self.host.save(
                 <- Gomoku.createEmptyVault(),
                 to: Gomoku.CollectionStoragePath
@@ -43,9 +66,9 @@ transaction(openingBet: UFix64) {
                 target: Gomoku.CollectionStoragePath
             )
         }
-
-        let compositionCollectionRef = self.host.borrow<&Gomoku.CompositionCollection>(from: Gomoku.CollectionStoragePath)
-          ?? panic("Could not borrow a reference to Gomoku CompositionCollection")
+        let compositionCollectionRef = self.host
+            .borrow<auth &Gomoku.CompositionCollection>(from: Gomoku.CollectionStoragePath)
+            ?? panic("Could not borrow a reference to auth Gomoku composition collection")
 
 
         let vault <- flowTokenVault.withdraw(amount: openingBet) as! @FlowToken.Vault
@@ -54,6 +77,7 @@ transaction(openingBet: UFix64) {
             host: self.host.address,
             openingBet: <- vault,
             identityCollectionRef: identityCollectionRef,
+            resultCollectionRef: resultCollectionRef,
             compositionCollectionRef: compositionCollectionRef)
 
     }
