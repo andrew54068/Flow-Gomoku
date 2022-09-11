@@ -10,6 +10,8 @@ import GomokuType from "./GomokuType.cdc"
 pub contract Gomoku {
 
     // Paths
+    pub let AdminStoragePath: StoragePath
+
     pub let CollectionStoragePath: StoragePath
     pub let CollectionPublicPath: PublicPath
 
@@ -53,6 +55,72 @@ pub contract Gomoku {
         next: UInt8
     )
 
+    pub resource Admin {
+
+        pub fun manualFinalizeByTimeout(index: UInt32) {
+            if let compositionRef = Gomoku.getCompositionRef(by: index) as &Gomoku.Composition? {
+                let participants = Gomoku.getParticipants(by: index)
+                assert(participants.length == 2, message: "Composition not matched.")
+                for participant in participants {
+                    if let identityCollectionRef = getAccount(participant)
+                        .getCapability<&GomokuIdentity.IdentityCollection>(GomokuIdentity.CollectionPublicPath)
+                        .borrow() {
+                        let identityToekn <- identityCollectionRef.withdraw(by: index) ?? panic("identity not found in address "
+                            .concat(participant.toString())
+                            .concat(" at index ")
+                            .concat(index.toString()))
+                        if let identityToeknBack <- compositionRef.finalizeByTimeout(identityToken: <- identityToekn) {
+                            identityCollectionRef.deposit(token: <- identityToeknBack)
+                        } else {
+                            identityCollectionRef.deposit(token: <- identityToekn)
+                        }
+                        return
+                    }
+                }
+            } else {
+                panic("Can't find reference to composition by ".concat(index.toString()))
+            }
+        }
+
+        pub fun recycleBets() {
+
+            let capability = Gomoku.account.getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+            let flowReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the Flow token receiver capability")
+
+            for key in Gomoku.hostOpeningBetMap.keys {
+                var hostOpeningBet: @FlowToken.Vault? <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+                Gomoku.hostOpeningBetMap[key] <-> hostOpeningBet
+                flowReceiverReference.deposit(from: <- (hostOpeningBet as! @FungibleToken.Vault))
+                let emptyVault <- Gomoku.hostOpeningBetMap.remove(key: key)
+                destroy emptyVault
+            }
+
+            for key in Gomoku.challengerOpeningBetMap.keys {
+                var challengerOpeningBet: @FlowToken.Vault? <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+                Gomoku.challengerOpeningBetMap[key] <-> challengerOpeningBet
+                flowReceiverReference.deposit(from: <- (challengerOpeningBet as! @FungibleToken.Vault))
+                let emptyVault <- Gomoku.challengerOpeningBetMap.remove(key: key)
+                destroy emptyVault
+            }
+
+            for key in Gomoku.hostRaisedBetMap.keys {
+                var hostRaisedBet: @FlowToken.Vault? <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+                Gomoku.hostRaisedBetMap[key] <-> hostRaisedBet
+                flowReceiverReference.deposit(from: <- (hostRaisedBet as! @FungibleToken.Vault))
+                let emptyVault <- Gomoku.hostRaisedBetMap.remove(key: key)
+                destroy emptyVault
+            }
+
+            for key in Gomoku.challengerRaisedBetMap.keys {
+                var challengerRaisedBet: @FlowToken.Vault? <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+                Gomoku.challengerRaisedBetMap[key] <-> challengerRaisedBet
+                flowReceiverReference.deposit(from: <- (challengerRaisedBet as! @FungibleToken.Vault))
+                let emptyVault <- Gomoku.challengerRaisedBetMap.remove(key: key)
+                destroy emptyVault
+            }
+        }
+    }
+
     init() {
         self.CollectionStoragePath = /storage/gomokuCompositionCollection
         self.CollectionPublicPath = /public/gomokuCompositionCollection
@@ -61,6 +129,10 @@ pub contract Gomoku {
         self.challengerOpeningBetMap <- {}
         self.hostRaisedBetMap <- {}
         self.challengerRaisedBetMap <- {}
+
+        self.AdminStoragePath = /storage/gomokuAdmin
+        let admin <- create Admin()
+        self.account.save(<- admin, to: self.AdminStoragePath)
 
         if self.account.borrow<&FlowToken.Vault>(from: /storage/flowTokenVault) == nil {
             let flowVault <- FlowToken.createEmptyVault()
@@ -247,44 +319,6 @@ pub contract Gomoku {
         } else {
             recycleBetVaultRef.deposit(from: <- bet)
             return false
-        }
-    }
-
-    priv fun recycleBets() {
-
-        let capability = self.account.getCapability<&FlowToken.Vault{FungibleToken.Receiver}>(/public/flowTokenReceiver)
-        let flowReceiverReference = capability.borrow() ?? panic("Could not borrow a reference to the Flow token receiver capability")
-
-        for key in self.hostOpeningBetMap.keys {
-            var hostOpeningBet: @FlowToken.Vault? <- FlowToken.createEmptyVault() as! @FlowToken.Vault
-            self.hostOpeningBetMap[key] <-> hostOpeningBet
-            flowReceiverReference.deposit(from: <- hostOpeningBet!)
-            let emptyVault <- self.hostOpeningBetMap.remove(key: key)
-            destroy emptyVault
-        }
-
-        for key in self.challengerOpeningBetMap.keys {
-            var challengerOpeningBet: @FlowToken.Vault? <- FlowToken.createEmptyVault() as! @FlowToken.Vault
-            self.challengerOpeningBetMap[key] <-> challengerOpeningBet
-            flowReceiverReference.deposit(from: <- challengerOpeningBet!)
-            let emptyVault <- self.challengerOpeningBetMap.remove(key: key)
-            destroy emptyVault
-        }
-
-        for key in self.hostRaisedBetMap.keys {
-            var hostRaisedBet: @FlowToken.Vault? <- FlowToken.createEmptyVault() as! @FlowToken.Vault
-            self.hostRaisedBetMap[key] <-> hostRaisedBet
-            flowReceiverReference.deposit(from: <- hostRaisedBet!)
-            let emptyVault <- self.hostRaisedBetMap.remove(key: key)
-            destroy emptyVault
-        }
-
-        for key in self.challengerRaisedBetMap.keys {
-            var challengerRaisedBet: @FlowToken.Vault? <- FlowToken.createEmptyVault() as! @FlowToken.Vault
-            self.challengerRaisedBetMap[key] <-> challengerRaisedBet
-            flowReceiverReference.deposit(from: <- challengerRaisedBet!)
-            let emptyVault <- self.challengerRaisedBetMap.remove(key: key)
-            destroy emptyVault
         }
     }
 
@@ -572,7 +606,6 @@ pub contract Gomoku {
             identityCollectionRef.deposit(token: <- identity)
         }
 
-        // Call after making sure two participants both has ResultCollection.
         // Restricted to prevent from potential attack.
         access(account) fun finalizeByTimeout(
             identityToken: @GomokuIdentity.IdentityToken
