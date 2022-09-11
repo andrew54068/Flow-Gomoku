@@ -1,5 +1,5 @@
-import FlowToken from "../contracts/FlowToken.cdc"
-import FungibleToken from "../contracts/FungibleToken.cdc"
+import FlowToken from 0xFLOW_TOKEN_ADDRESS
+import FungibleToken from 0xFUNGIBLE_TOKEN_ADDRESS
 
 pub fun main(address: Address): UFix64 {
   let flowValutRef = getAccount(address)

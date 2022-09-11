@@ -1,5 +1,5 @@
-import Gomoku from "../contracts/Gomoku.cdc"
-import GomokuIdentity from "../contracts/GomokuIdentity.cdc"
+import Gomoku from 0xGOMOKU_ADDRESS
+import GomokuIdentity from 0xGOMOKU_IDENTITY_ADDRESS
 
 transaction(index: UInt32) {
     let player: AuthAccount

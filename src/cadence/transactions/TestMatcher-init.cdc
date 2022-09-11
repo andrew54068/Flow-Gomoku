@@ -1,4 +1,4 @@
-import MatchContract from "./MatchContract.cdc"
+import MatchContract from 0xMATCH_CONTRACT_ADDRESS
 
 transaction() {
   let signer: AuthAccount

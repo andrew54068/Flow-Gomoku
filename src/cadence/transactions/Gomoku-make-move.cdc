@@ -1,8 +1,10 @@
-import Gomoku from "../contracts/Gomoku.cdc"
-import FlowToken from "../contracts/FlowToken.cdc"
-import FungibleToken from "../contracts/FungibleToken.cdc"
-import GomokuIdentity from "../contracts/GomokuIdentity.cdc"
-import GomokuType from "../contracts/GomokuType.cdc"
+import Gomoku from 0xGOMOKU_ADDRESS
+import FlowToken from 0xFLOW_TOKEN_ADDRESS
+import FungibleToken from 0xFUNGIBLE_TOKEN_ADDRESS
+import FlowToken from 0xFLOW_TOKEN_ADDRESS
+import FungibleToken from 0xFUNGIBLE_TOKEN_ADDRESS
+import GomokuIdentity from 0xGOMOKU_IDENTITY_ADDRESS
+import GomokuType from 0xGOMOKU_TYPE_ADDRESS
 
 transaction(index: UInt32, x: Int8, y: Int8, bet: UFix64) {
     let player: AuthAccount

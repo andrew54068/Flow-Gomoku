@@ -1,8 +1,8 @@
-import MatchContract from "../contracts/MatchContract.cdc"
-import Gomoku from "../contracts/Gomoku.cdc"
-import FlowToken from "../contracts/FlowToken.cdc"
-import FungibleToken from "../contracts/FungibleToken.cdc"
-import GomokuIdentity from "../contracts/GomokuIdentity.cdc"
+import MatchContract from 0xMATCH_CONTRACT_ADDRESS
+import Gomoku from 0xGOMOKU_ADDRESS
+import FlowToken from 0xFLOW_TOKEN_ADDRESS
+import FungibleToken from 0xFUNGIBLE_TOKEN_ADDRESS
+import GomokuIdentity from 0xGOMOKU_IDENTITY_ADDRESS
 
 transaction(budget: UFix64) {
     let challenger: AuthAccount
