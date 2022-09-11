@@ -861,7 +861,7 @@ pub contract Gomoku {
                     id: id,
                     winner: winnerAddress,
                     losser: losserAddress,
-                    gain: Fix64(0),
+                    gain: Fix64(hostReward),
                     steps: steps
                 )
                 losserResultCollection.deposit(token: <- losserResultToken)
