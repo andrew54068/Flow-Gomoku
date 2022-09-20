@@ -128,6 +128,42 @@ describe("Gomoku", () => {
     await matchGomokuAlongWithRegister(1, aliceAddress, bobAddressName, 2)
   })
 
+  test("match by index with match enable", async () => {
+    const aliceAddress = adminAddressName
+
+    const alice = await getAccountAddress(aliceAddress)
+
+    await serviceAccountMintTo(alice, 5.1)
+
+    await registerWithFlowByAddress(aliceAddress, 2.5)
+    await registerWithFlowByAddress(aliceAddress, 2)
+
+    const bobAddressName = "Bob"
+    const bob = await getAccountAddress(bobAddressName)
+    await serviceAccountMintTo(bob, 2)
+
+    const admin = await getAccountAddress(adminAddressName)
+    const args = []
+    const signers = [admin]
+
+    const [txResult, error] = await shallPass(
+      sendTransaction('TestMatcher-admin-active-match', signers, args)
+    )
+    expect(error).toBeNull()
+    console.log(txResult, error)
+
+    const challenger = [bob]
+    const budget = 2
+    const index = 1
+    const args2 = [budget, index]
+
+    const [txResult1, error1] = await shallPass(
+      sendTransaction('Gomoku-match-by-index', challenger, args2)
+    )
+    expect(error1).toBeNull()
+    console.log(txResult1, error1)
+  })
+
   test("match with match enable budget not enough", async () => {
 
     const aliceAddress = adminAddressName
