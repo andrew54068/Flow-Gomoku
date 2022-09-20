@@ -36,7 +36,7 @@ describe("Matcher control", () => {
     const [txResult, error] = await shallRevert(
       sendTransaction('TestMatcher-init', signers, args)
     )
-    console.log(txResult, error)
+    
 
   })
 
@@ -49,7 +49,7 @@ describe("Matcher control", () => {
     const [txResult, error] = await shallPass(
       sendTransaction('TestMatcher-admin-active-register', signers, args)
     )
-    console.log(txResult, error)
+    
 
   })
 
@@ -62,7 +62,7 @@ describe("Matcher control", () => {
     const [txResult, error] = await shallRevert(
       sendTransaction('TestMatcher-admin-active-register', signers, args)
     )
-    console.log(txResult, error)
+    
 
   })
 
@@ -75,7 +75,7 @@ describe("Matcher control", () => {
     const [txResult, error] = await shallRevert(
       sendTransaction('TestMatcher-admin-inactive-register', signers, args)
     )
-    console.log(txResult, error)
+    
 
   })
 
@@ -88,7 +88,7 @@ describe("Matcher control", () => {
     const [txResult, error] = await shallPass(
       sendTransaction('TestMatcher-admin-active-register', signers, args)
     )
-    console.log(txResult, error)
+    
 
     const bob = await getAccountAddress("Bob")
     const args2 = []
@@ -97,7 +97,7 @@ describe("Matcher control", () => {
     const [txResult2, error2] = await shallPass(
       sendTransaction('TestMatcher-register', signers2, args2)
     )
-    console.log(txResult2, error2)
+    
 
   })
 
@@ -114,12 +114,12 @@ describe("Matcher control", () => {
     const [txResult, error] = await shallPass(
       sendTransaction('TestMatcher-admin-active-register', signers, args)
     )
-    console.log(txResult, error)
+    
 
     const [registerTxResult, registerError] = await shallPass(
       sendTransaction('TestMatcher-register', signers, args)
     )
-    console.log(registerTxResult, registerError)
+    
 
     const [result2, scriptError2] = await executeScript('Matcher-get-index', [])
     expect(scriptError2).toBeNull()
@@ -132,7 +132,7 @@ describe("Matcher control", () => {
     const [txResult2, error2] = await shallPass(
       sendTransaction('TestMatcher-register', signers2, args2)
     )
-    console.log(txResult2, error2)
+    
 
     const [result3, scriptError3] = await executeScript('Matcher-get-index', [])
     expect(scriptError3).toBeNull()
@@ -152,7 +152,7 @@ describe("Matcher control", () => {
     const [txResult2, error2] = await shallRevert(
       sendTransaction('TestMatcher-register', signers2, args2)
     )
-    console.log(txResult2, error2)
+    
 
     const [result2, scriptError2] = await executeScript('Matcher-get-index', [])
     expect(scriptError2).toBeNull()
@@ -172,12 +172,12 @@ describe("Matcher control", () => {
     const [txResult, error] = await shallPass(
       sendTransaction('TestMatcher-admin-active-register', signers, args)
     )
-    console.log(txResult, error)
+    
 
     const [registerTxResult, registerError] = await shallPass(
       sendTransaction('TestMatcher-register', signers, args)
     )
-    console.log(registerTxResult, registerError)
+    
 
     const bob = await getAccountAddress("Bob")
     const args2 = []
@@ -186,7 +186,7 @@ describe("Matcher control", () => {
     const [txResult2, error2] = await shallPass(
       sendTransaction('TestMatcher-register', signers2, args2)
     )
-    console.log(txResult2, error2)
+    
 
     const [scriptResult2, scriptError2] = await executeScript('Matcher-get-random-waiting-index', [])
     expect(scriptError2).toBeNull()
@@ -211,12 +211,12 @@ describe("Matcher control", () => {
     const [txResult, error] = await shallPass(
       sendTransaction('TestMatcher-admin-active-register', signers, args)
     )
-    console.log(txResult, error)
+    
 
     const [registerTxResult, registerError] = await shallPass(
       sendTransaction('TestMatcher-register', signers, args)
     )
-    console.log(registerTxResult, registerError)
+    
 
     const [scriptResult, scriptError] = await executeScript('Matcher-get-random-waiting-index', [])
     expect(scriptError).toBeNull()
@@ -229,7 +229,7 @@ describe("Matcher control", () => {
     const [txResult2, error2] = await shallRevert(
       sendTransaction('TestMatcher-match', signers2, args2)
     )
-    console.log(txResult2, error2)
+    
 
   })
 
@@ -242,12 +242,12 @@ describe("Matcher control", () => {
     const [txResult, error] = await shallPass(
       sendTransaction('TestMatcher-admin-active-register', signers, args)
     )
-    console.log(txResult, error)
+    
 
     const [registerTxResult, registerError] = await shallPass(
       sendTransaction('TestMatcher-register', signers, args)
     )
-    console.log(registerTxResult, registerError)
+    
 
     const args2 = []
     const signers2 = [alice]
@@ -255,7 +255,7 @@ describe("Matcher control", () => {
     const [txResult2, error2] = await shallPass(
       sendTransaction('TestMatcher-admin-active-match', signers2, args2)
     )
-    console.log(txResult2, error2)
+    
 
     const [scriptResult, scriptError] = await executeScript('Matcher-get-random-waiting-index', [])
     expect(scriptError).toBeNull()
@@ -269,9 +269,9 @@ describe("Matcher control", () => {
     const [txResult3, error3] = await shallRevert(
       sendTransaction('TestMatcher-match', signers3, args3)
     )
-    console.log(txResult3, error3)
+    
 
-  })
+  }, 10 * 1000)
 
   test("match inactive", async () => {
 
@@ -282,12 +282,12 @@ describe("Matcher control", () => {
     const [txResult, error] = await shallPass(
       sendTransaction('TestMatcher-admin-active-register', signers, args)
     )
-    console.log(txResult, error)
+    
 
     const [registerTxResult, registerError] = await shallPass(
       sendTransaction('TestMatcher-register', signers, args)
     )
-    console.log(registerTxResult, registerError)
+    
 
     const args2 = []
     const signers2 = [alice]
@@ -295,7 +295,7 @@ describe("Matcher control", () => {
     const [txResult2, error2] = await shallPass(
       sendTransaction('TestMatcher-admin-active-match', signers2, args2)
     )
-    console.log(txResult2, error2)
+    
 
     const args3 = []
     const signers3 = [alice]
@@ -303,7 +303,7 @@ describe("Matcher control", () => {
     const [txResult3, error3] = await shallPass(
       sendTransaction('TestMatcher-admin-inactive-match', signers3, args3)
     )
-    console.log(txResult3, error3)
+    
 
     const [scriptResult, scriptError] = await executeScript('Matcher-get-random-waiting-index', [])
     expect(scriptError).toBeNull()
@@ -316,8 +316,8 @@ describe("Matcher control", () => {
     const [txResult4, error4] = await shallRevert(
       sendTransaction('TestMatcher-match', signers4, args4)
     )
-    console.log(txResult4, error4)
+    
 
-  })
+  }, 10 * 1000)
 
 })

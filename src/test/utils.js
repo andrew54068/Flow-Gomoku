@@ -135,7 +135,6 @@ export const serviceAccountMintTo = async (receiver, amount) => {
     sendTransaction('Mint-flow', serviceAccount, mintArgs)
   )
   expect(mintError).toBeNull()
-  console.log(mintResult)
 }
 
 export const registerWithFlowByAddress = async (addressName, bet) => {
@@ -148,7 +147,6 @@ export const registerWithFlowByAddress = async (addressName, bet) => {
     sendTransaction('TestMatcher-admin-active-register', signers, args)
   )
   expect(error).toBeNull()
-  console.log(txResult, error)
 
   const account = await getAccountAddress(addressName)
   const args1 = [bet]
@@ -158,7 +156,6 @@ export const registerWithFlowByAddress = async (addressName, bet) => {
     sendTransaction('Gomoku-register', signers1, args1)
   )
   expect(error1).toBeNull()
-  console.log(txResult1, error1)
 }
 
 export const matching = async (challenger, budget) => {
@@ -170,7 +167,6 @@ export const matching = async (challenger, budget) => {
     sendTransaction('TestMatcher-admin-active-match', signers, args)
   )
   expect(error).toBeNull()
-  console.log(txResult, error)
 
   const signers1 = [challenger]
 
@@ -178,7 +174,6 @@ export const matching = async (challenger, budget) => {
     sendTransaction('Gomoku-match', signers1, [budget])
   )
   expect(error1).toBeNull()
-  console.log(txResult1, error1)
 }
 
 export const matchGomokuAlongWithRegister = async (index, hostAddressName, challengerAddressName, bet) => {
@@ -192,7 +187,6 @@ export const matchGomokuAlongWithRegister = async (index, hostAddressName, chall
 
   const [scriptResult, scriptError] = await executeScript('Gomoku-get-composition-ref', [index])
   expect(scriptError).toBeNull()
-  console.log(scriptResult)
   expect(scriptResult["host"]).toBe(host)
   expect(scriptResult["challenger"]).toBe(challenger)
   expect(scriptResult["currentRound"]).toBe(0)
@@ -225,11 +219,9 @@ export const makeMove = async (player, index, round, stone, raiseBet, expectSton
     sendTransaction('Gomoku-make-move', signers, args, limit)
   )
   expect(error).toBeNull()
-  console.log(txResult, error)
 
   const [scriptResult, scriptError] = await executeScript('Gomoku-get-stone-data', [index, round])
   expect(scriptError).toBeNull()
-  console.log(scriptResult)
   expect(scriptResult).toEqual(expectStoneData)
 }
 
