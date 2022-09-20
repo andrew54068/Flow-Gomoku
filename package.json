@@ -5,6 +5,7 @@
   "scripts": {
     "ts": "node -r esbuild-register -r tsconfig-paths/register",
     "start": "node -r esbuild-register -r tsconfig-paths/register test.ts",
+    "enable": "node -r esbuild-register -r tsconfig-paths/register src/example/enable.ts",
     "ts-check": "tsc --noEmit",
     "test": "jest test --testPathIgnorePatterns=test/match.test.js"
   },
@@ -13,7 +14,10 @@
     "@onflow/flow-js-testing": "^0.3.0-alpha.10",
     "@onflow/types": "^1.0.2",
     "@types/node": "^14.14.35",
+    "dotenv": "^16.0.2",
+    "elliptic": "^6.5.4",
     "esbuild-register": "^2.5.0",
+    "sha3": "^2.1.4",
     "tsconfig-paths": "^3.9.0",
     "typescript": "^4.2.3"
   },
